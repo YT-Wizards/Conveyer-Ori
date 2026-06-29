@@ -197,7 +197,7 @@ export const DEFAULTS: Record<SettingKey, string> = {
   VIDEO_CONTEXT: "",
 
   // TTS
-  TTS_PROVIDER: "ai33pro",
+  TTS_PROVIDER: "genaipro",
   LABS69_API_KEY: "",
   MINIMAX_API_KEY: "",
   MINIMAX_GROUP_ID: "",
