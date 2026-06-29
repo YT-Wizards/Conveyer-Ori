@@ -77,6 +77,8 @@ export const SETTING_KEYS = [
   "IMAGE_MODEL",               // gemini image model, e.g. gemini-2.5-flash-image
   "GENAIPRO_API_KEY",          // GenAIPro key — AI images (genaipro provider) AND the GenAIPro voice (one key)
   "GENAIPRO_IMAGE_MODEL",      // nano_banana_pro | nano_banana_2 | imagen_4
+  "KIE_API_KEY",               // kie.ai key — AI images when IMAGE_PROVIDER=kie (Patrice's default provider)
+  "KIE_IMAGE_MODEL",           // kie.ai image model, e.g. google/nano-banana
   "AI_MATCH_THRESHOLD",        // 0-100: a generated image must score this on the relevance check or it is regenerated
   "AI_REGEN_ATTEMPTS",         // 1-8: how many times to regenerate before keeping the best
   "AI_IMAGE_STYLE",            // optional extra style words appended to every AI image prompt
@@ -255,6 +257,8 @@ export const DEFAULTS: Record<SettingKey, string> = {
   IMAGE_MODEL: "gemini-2.5-flash-image",
   GENAIPRO_API_KEY: "",
   GENAIPRO_IMAGE_MODEL: "nano_banana_pro",
+  KIE_API_KEY: "",
+  KIE_IMAGE_MODEL: "google/nano-banana",
   AI_MATCH_THRESHOLD: "60",
   AI_REGEN_ATTEMPTS: "3",
   AI_IMAGE_STYLE: "",

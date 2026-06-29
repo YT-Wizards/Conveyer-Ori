@@ -120,17 +120,63 @@ async function genaiproImage(prompt: string, outFile: string): Promise<void> {
   throw new Error("GenAIPro image: timed out");
 }
 
-function imageProvider(): "gemini" | "genaipro" {
-  return (getSetting("IMAGE_PROVIDER") || "gemini").trim().toLowerCase() === "genaipro" ? "genaipro" : "gemini";
+/** kie.ai nano-banana image generation (the Patrice-lineage default provider). */
+async function kieImage(prompt: string, outFile: string): Promise<void> {
+  const key = getSetting("KIE_API_KEY").trim();
+  if (!key) throw new Error("KIE_API_KEY is not set");
+  const BASE = "https://api.kie.ai";
+  const model = getSetting("KIE_IMAGE_MODEL") || "google/nano-banana";
+  const auth = { Authorization: `Bearer ${key}` };
+
+  // kie.ai returns app-level errors as HTTP 200 with a non-200 `code` in the body.
+  const created = await (async () => {
+    const r = await fetchWithTimeout(`${BASE}/api/v1/jobs/createTask`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, input: { prompt: prompt.slice(0, 5000), output_format: "png", aspect_ratio: "16:9", nsfw_checker: false } }),
+    }, 60_000);
+    const text = await r.text();
+    if (!r.ok) throw new Error(`kie.ai createTask ${r.status}: ${text.slice(0, 160)}`);
+    const j = JSON.parse(text) as { code?: number; msg?: string; data?: { taskId?: string } };
+    if (typeof j.code === "number" && j.code !== 200) throw new Error(`kie.ai createTask code ${j.code}: ${j.msg || ""}`);
+    return j;
+  })();
+  const taskId = created.data?.taskId;
+  if (!taskId) throw new Error("kie.ai: createTask returned no taskId");
+
+  const deadline = Date.now() + 5 * 60 * 1000;
+  let delay = 4000;
+  while (Date.now() < deadline) {
+    await sleep(delay);
+    delay = Math.min(delay + 1500, 12000);
+    const r = await fetchWithTimeout(`${BASE}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, { headers: auth }, 60_000);
+    if (!r.ok) { if (r.status === 429 || r.status >= 500) continue; throw new Error(`kie.ai recordInfo ${r.status}`); }
+    const j = JSON.parse(await r.text()) as { data?: { state?: string; resultJson?: string; failMsg?: string; failCode?: string } };
+    const state = j.data?.state;
+    if (state === "success" && j.data?.resultJson) {
+      const url = (JSON.parse(j.data.resultJson) as { resultUrls?: string[] }).resultUrls?.[0];
+      if (!url) throw new Error("kie.ai: success but no resultUrls");
+      const dl = await fetchWithTimeout(url, {}, 120_000);
+      if (!dl.ok) throw new Error(`kie.ai download ${dl.status}`);
+      fs.writeFileSync(outFile, Buffer.from(await dl.arrayBuffer()));
+      return;
+    }
+    if (state === "fail") throw new Error(`kie.ai failed: ${j.data?.failMsg || j.data?.failCode || "unknown"}`);
+  }
+  throw new Error("kie.ai: timed out");
+}
+
+function imageProvider(): "gemini" | "genaipro" | "kie" {
+  const p = (getSetting("IMAGE_PROVIDER") || "gemini").trim().toLowerCase();
+  return p === "genaipro" ? "genaipro" : p === "kie" ? "kie" : "gemini";
 }
 
 /** Generate one AI image to `outFile`. Throws on failure. */
 async function generateAiImage(prompt: string, outFile: string): Promise<void> {
-  if (imageProvider() === "genaipro") {
-    await genaiproImage(prompt, outFile);
-  } else {
-    fs.writeFileSync(outFile, await geminiImage(prompt));
-  }
+  const provider = imageProvider();
+  if (provider === "genaipro") await genaiproImage(prompt, outFile);
+  else if (provider === "kie") await kieImage(prompt, outFile);
+  else fs.writeFileSync(outFile, await geminiImage(prompt));
 }
 
 // ── prompt + scoring ────────────────────────────────────────────────────────
@@ -222,6 +268,7 @@ export async function tryAiPhotoFallback(
   const provider = imageProvider();
   if (provider === "gemini" && !getSetting("GOOGLE_API_KEY").trim()) return null;
   if (provider === "genaipro" && !getSetting("GENAIPRO_API_KEY").trim()) return null;
+  if (provider === "kie" && !getSetting("KIE_API_KEY").trim()) return null;
 
   const threshold = Math.max(0, Math.min(100, Number(getSetting("AI_MATCH_THRESHOLD") || "60"))) / 100;
   const maxAttempts = Math.max(1, Math.min(8, Number(getSetting("AI_REGEN_ATTEMPTS") || "3")));

@@ -379,8 +379,8 @@ export const ALL_GROUPS: Group[] = [
       {
         key: "IMAGE_PROVIDER",
         label: "AI image provider",
-        desc: "gemini uses your existing Google key — no extra setup (recommended). genaipro uses your GenAIPro account's image credits.",
-        examples: "gemini (default) · genaipro",
+        desc: "Which service generates the AI photo. gemini uses your existing Google key — no extra setup (recommended). genaipro uses your GenAIPro account's image credits. kie uses kie.ai (Patrice's default — needs a separate kie.ai key). All produce the same Google nano-banana image family.",
+        examples: "gemini (default) · genaipro · kie",
       },
       {
         key: "IMAGE_MODEL",
@@ -399,6 +399,18 @@ export const ALL_GROUPS: Group[] = [
         label: "GenAIPro image model",
         desc: "Image model used when the provider is genaipro.",
         examples: "nano_banana_pro (default) · nano_banana_2 · imagen_4",
+      },
+      {
+        key: "KIE_API_KEY",
+        label: "kie.ai API key",
+        desc: "Your kie.ai key. Used for AI images when provider is kie (Patrice's default — nano-banana via the kie.ai gateway).",
+        examples: "Paste locally only; never commit keys.",
+      },
+      {
+        key: "KIE_IMAGE_MODEL",
+        label: "kie.ai image model",
+        desc: "Image model used when the provider is kie.",
+        examples: "google/nano-banana (default)",
       },
       {
         key: "AI_MATCH_THRESHOLD",
