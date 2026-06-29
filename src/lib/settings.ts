@@ -39,15 +39,6 @@ export const SETTING_KEYS = [
   "MIN_SCENE_SECONDS",       // single-shot minimum seconds a visual stays on screen
   "MAX_PAUSE_SECONDS",       // single-shot max silence cap
 
-  // ── HeyGen host/avatar segments ───────────────────────────────────
-  "HEYGEN_MODE",             // off | host_segments | full_host (reserved)
-  "HEYGEN_API_KEY",          // HeyGen API key. Secret; never commit real values.
-  "HEYGEN_AVATAR_ID",        // HeyGen avatar id
-  "HEYGEN_VOICE_ID",         // HeyGen voice id
-  "HEYGEN_ASPECT_RATIO",     // 16:9 | 9:16 | 1:1
-  "HEYGEN_OUTPUT_FORMAT",    // mp4
-  "HEYGEN_CACHE",            // on | off
-
   // ── Stock footage (multi-source) ──────────────────────────────────
   "FOOTAGE_SOURCES",           // comma list: pexels,pixabay (video+photo) · openverse,wikimedia (CC images) · archive (CC video, opt-in). Default "pexels,pixabay,openverse,wikimedia".
   "OPENVERSE_TOKEN",           // optional Openverse bearer token (raises rate limits). Empty works (anonymous).
@@ -218,15 +209,6 @@ export const DEFAULTS: Record<SettingKey, string> = {
   MAX_CLIP_SECONDS: "7",
   MIN_SCENE_SECONDS: "3",
   MAX_PAUSE_SECONDS: "0.6",
-
-  // HeyGen host/avatar segments. Empty by default; user fills locally in Settings/.env.
-  HEYGEN_MODE: "off",
-  HEYGEN_API_KEY: "",
-  HEYGEN_AVATAR_ID: "",
-  HEYGEN_VOICE_ID: "",
-  HEYGEN_ASPECT_RATIO: "16:9",
-  HEYGEN_OUTPUT_FORMAT: "mp4",
-  HEYGEN_CACHE: "on",
 
   // Stock footage
   FOOTAGE_SOURCES: "pexels,pixabay,openverse,wikimedia",

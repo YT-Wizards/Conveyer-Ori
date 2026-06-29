@@ -1,5 +1,10 @@
 /**
  * Single source of truth for the settings form schema.
+ *
+ * Top of the page = the few things that matter (required keys, voice, AI images,
+ * the two-zone timeline). Everything technical is in `collapsed` groups so it
+ * stays out of the way. Provider keys/models use `showIf` so only the key for
+ * the CHOSEN provider is shown (no more wall of every provider's key at once).
  */
 
 export interface Field {
@@ -9,479 +14,348 @@ export interface Field {
   examples?: string;
   required?: boolean;
   multiline?: boolean;
-  /** Hard character cap enforced by the input/textarea (e.g. short hint fields). */
+  /** Hard character cap for short hint fields. */
   maxLength?: number;
+  /** Render as a dropdown with these options instead of a text input. */
+  type?: "select";
+  options?: { value: string; label: string }[];
+  /** Show this field only when one of these conditions matches (e.g. reveal a
+   *  provider's key/model only when that provider is selected). Shown always if omitted. */
+  showIf?: { key: string; in: string[] }[];
 }
 
 export interface Group {
   title: string;
   subtitle?: string;
   required?: boolean;
+  /** Render collapsed — advanced/technical settings hidden behind a disclosure. */
+  collapsed?: boolean;
   fields: Field[];
 }
 
+// Which voice engine uses which key (so we only show the selected one's key).
+const VOICE_AI33 = ["ai33pro", "kokoro", "minimax-ai33pro"];
+
 export const ALL_GROUPS: Group[] = [
+  // ── 1. REQUIRED ──────────────────────────────────────────────────────────
   {
-    title: "Required API Keys",
-    subtitle: "The minimum keys needed for script splitting, stock footage, voice alignment, and b-roll scoring.",
+    title: "Required Keys",
+    subtitle: "The three keys the app needs to work at all. Paste each, then click Save.",
     required: true,
     fields: [
       {
         key: "GOOGLE_API_KEY",
-        desc: "Google Gemini API key. Used for Gemini scene splitting when selected, and also for Gemini Vision scoring when AI picks the best footage is on.",
+        label: "Google (Gemini) key",
+        desc: "Splits your script into scenes AND checks that footage matches. Free key.",
         examples: "Get it at https://aistudio.google.com/app/apikey",
         required: true,
       },
       {
         key: "PEXELS_API_KEY",
-        desc: "Pexels API key. You can paste multiple keys, one per line or comma-separated. The app rotates through them when rate limits are hit.",
-        examples: "Single key or multiple keys, one per line",
+        label: "Pexels key",
+        desc: "The library of real video clips and photos. You can paste several keys (one per line) — the app rotates them. Free.",
+        examples: "Get it at https://www.pexels.com/api/",
         required: true,
         multiline: true,
       },
       {
-        key: "PIXABAY_API_KEY",
-        label: "Pixabay API key (optional)",
-        desc: "Optional Pixabay API key. When set, the app searches Pixabay alongside Pexels for more video and photo candidates.",
-        examples: "Get it at https://pixabay.com/api/docs/",
-      },
-      {
         key: "GROQ_API_KEY",
-        label: "Groq API key (Whisper alignment)",
-        desc: "Used in single-shot voice mode to align the continuous voiceover to scene boundaries with word timestamps.",
+        label: "Groq key",
+        desc: "Lines the voiceover up perfectly with the pictures. Free.",
         examples: "Get it at https://console.groq.com/keys",
         required: true,
       },
     ],
   },
+
+  // ── 2. VOICE ─────────────────────────────────────────────────────────────
   {
-    title: "Storage Location",
-    subtitle: "Where generated audio, assets, and final videos are saved.",
-    fields: [
-      {
-        key: "RUNS_OUTPUT_DIR",
-        desc: "Absolute folder path for run outputs. Leave empty to use the default app data folder.",
-        examples: "Mac: /Users/you/Documents/Conveyer-Runs · Windows: D:\\YouTube\\Conveyer-Runs",
-      },
-      {
-        key: "FFMPEG_PATH",
-        desc: "Absolute path to ffmpeg. Only needed if ffmpeg is not in your system PATH.",
-        examples: "Mac: /opt/homebrew/bin/ffmpeg · Windows: C:\\ffmpeg\\bin\\ffmpeg.exe",
-      },
-    ],
-  },
-  {
-    title: "Script Breakdown (LLM Provider)",
-    subtitle: "Configure which LLM provider and model splits your script into scenes.",
-    fields: [
-      {
-        key: "SCENE_SPLIT_PROVIDER",
-        label: "LLM Provider",
-        desc: "Provider used for splitting scripts into scenes. Use gemini for Google Gemini, or openai for OpenAI-compatible providers like DeepSeek/OpenRouter/OpenAI.",
-        examples: "gemini · openai",
-      },
-      {
-        key: "SCENE_SPLIT_MODEL",
-        label: "Model ID",
-        desc: "Model identifier for the selected scene split provider.",
-        examples: "Gemini: gemini-2.5-flash (recommended) · DeepSeek: deepseek-v4-flash, deepseek-v4-pro",
-      },
-      {
-        key: "OPENAI_API_KEY",
-        label: "OpenAI-compatible API key",
-        desc: "API key for the OpenAI-compatible scene split provider. Required when LLM Provider is openai.",
-        examples: "DeepSeek/OpenAI/OpenRouter key",
-      },
-      {
-        key: "OPENAI_BASE_URL",
-        label: "Custom API Base URL",
-        desc: "Base URL for the OpenAI-compatible provider.",
-        examples: "DeepSeek: https://api.deepseek.com · OpenRouter: https://openrouter.ai/api/v1",
-      },
-    ],
-  },
-  {
-    title: "Voice Over — TTS",
-    subtitle: "Choose the narration engine and voice settings.",
+    title: "Voice Over",
+    subtitle: "Pick the engine that reads your script, then enter only its key + your Voice ID.",
     fields: [
       {
         key: "TTS_PROVIDER",
         label: "Voice engine",
-        desc: "Voice engine used for narration.",
-        examples: "ai33pro · 69labs · kokoro · minimax · minimax-ai33pro",
+        desc: "Which service generates the narration. GenAIPro covers voice AND images on one key.",
+        type: "select",
+        options: [
+          { value: "genaipro", label: "GenAIPro (voice + images, one key)" },
+          { value: "ai33pro", label: "ElevenLabs voices (via ai33.pro)" },
+          { value: "69labs", label: "ElevenLabs voices (via 69labs)" },
+          { value: "minimax", label: "MiniMax (direct)" },
+          { value: "minimax-ai33pro", label: "MiniMax (via ai33.pro)" },
+          { value: "kokoro", label: "Kokoro (via ai33.pro)" },
+        ],
+      },
+      {
+        key: "GENAIPRO_API_KEY",
+        label: "GenAIPro key (voice + images)",
+        desc: "Your GenAIPro key. One key for the whole GenAIPro account — voice and AI images. Needs Veo credits for images.",
+        examples: "Paste locally only; never commit keys.",
+        showIf: [{ key: "TTS_PROVIDER", in: ["genaipro"] }],
       },
       {
         key: "AI33PRO_API_KEY",
         label: "ai33.pro key",
-        desc: "ai33.pro API key. Used for ai33pro, kokoro, and minimax-ai33pro engines.",
-        examples: "Paste locally only; never commit API keys.",
+        desc: "Used for the ai33.pro / kokoro / MiniMax-via-ai33pro voice engines.",
+        examples: "Paste locally only.",
+        showIf: [{ key: "TTS_PROVIDER", in: VOICE_AI33 }],
       },
       {
         key: "LABS69_API_KEY",
         label: "69labs key",
-        desc: "69labs API key. Used only when Voice engine is 69labs.",
+        desc: "Used for the 69labs voice engine.",
         examples: "vk_...",
+        showIf: [{ key: "TTS_PROVIDER", in: ["69labs"] }],
       },
       {
         key: "MINIMAX_API_KEY",
         label: "MiniMax key",
-        desc: "MiniMax official API key. Used only when Voice engine is minimax.",
-        examples: "Paste locally only; never commit API keys.",
+        desc: "Used for the MiniMax (direct) voice engine.",
+        examples: "Paste locally only.",
+        showIf: [{ key: "TTS_PROVIDER", in: ["minimax"] }],
       },
       {
         key: "MINIMAX_GROUP_ID",
         label: "MiniMax Group ID",
-        desc: "MiniMax Group ID, if required by your account.",
-        examples: "GroupId from your MiniMax dashboard",
-      },
-      {
-        key: "MINIMAX_MODEL",
-        label: "MiniMax model",
-        desc: "MiniMax TTS model.",
-        examples: "speech-02-hd · speech-02-turbo",
-      },
-      {
-        key: "TTS_MODE",
-        label: "Voice mode",
-        desc: "single-shot records one continuous voiceover and aligns it with Whisper. per-scene records each scene separately.",
-        examples: "single-shot · per-scene",
-      },
-      {
-        key: "TTS_VOICE_PROVIDER",
-        label: "Voice provider path",
-        desc: "Voice provider path for engines that support multiple backends.",
-        examples: "elevenlabs · edgetts · voice-clone",
+        desc: "Required by some MiniMax accounts.",
+        examples: "From your MiniMax dashboard",
+        showIf: [{ key: "TTS_PROVIDER", in: ["minimax"] }],
       },
       {
         key: "TTS_VOICE_ID",
-        label: "Voice id",
-        desc: "Narration voice id or voice name, depending on the selected engine.",
+        label: "Voice ID",
+        desc: "The voice to use — paste the exact Voice ID from your provider. Same voice every video.",
         examples: "ElevenLabs id · Kokoro voice · MiniMax voice",
-      },
-      {
-        key: "TTS_MODEL",
-        label: "TTS model",
-        desc: "Model id for ElevenLabs-compatible engines.",
-        examples: "eleven_multilingual_v2 · eleven_turbo_v2_5",
       },
       {
         key: "TTS_SPEED",
         label: "Voice speed",
-        desc: "Playback tempo. Lower values create a calmer, slower narration.",
-        examples: "1.0 normal · 0.9 calmer · 0.85 slower",
-      },
-      {
-        key: "MIN_SCENE_SECONDS",
-        label: "Min seconds per shot",
-        desc: "Single-shot mode only. Shortest time a visual stays on screen before scenes are merged.",
-        examples: "3 default · 4 calmer · 2 snappier",
-      },
-      {
-        key: "MAX_CLIP_SECONDS",
-        label: "Max seconds per b-roll clip",
-        desc: "Single-shot mode only. Long visual segments are split into clips up to this many seconds.",
-        examples: "7 default · 12 batch · 0 disable split",
-      },
-      {
-        key: "MAX_PAUSE_SECONDS",
-        label: "Max pause between sentences",
-        desc: "Single-shot mode only. Caps long silences in the continuous voiceover after TTS generation.",
-        examples: "0.6 default · 0.4 tighter · 0 off",
+        desc: "Playback tempo. Lower = calmer, slower narration.",
+        examples: "1.0 normal · 0.9 calmer",
       },
     ],
   },
+
+  // ── 3. AI IMAGES ─────────────────────────────────────────────────────────
   {
-    title: "AI Host — HeyGen",
-    subtitle: "Optional avatar host segments. The first implementation stores configuration only; the generation service comes next.",
-    fields: [
-      {
-        key: "HEYGEN_MODE",
-        label: "HeyGen mode",
-        desc: "Controls HeyGen usage. off disables it. host_segments will later insert short avatar-host clips. full_host is reserved for future use.",
-        examples: "off (default) · host_segments · full_host",
-      },
-      {
-        key: "HEYGEN_API_KEY",
-        label: "HeyGen API key",
-        desc: "Your HeyGen API key. Store it only locally in Settings or .env. Never commit real API keys to GitHub.",
-        examples: "Create a new key in HeyGen, then paste it locally here.",
-      },
-      {
-        key: "HEYGEN_AVATAR_ID",
-        label: "HeyGen Avatar ID",
-        desc: "Avatar ID to use for host/avatar video segments.",
-        examples: "Example format: 8b1bf31bcd6b40be8dee724ef620c543",
-      },
-      {
-        key: "HEYGEN_VOICE_ID",
-        label: "HeyGen Voice ID",
-        desc: "Voice ID to use for HeyGen host/avatar segments.",
-        examples: "Example format: f4b965c309494dcdb6b8f475bf8e839c",
-      },
-      {
-        key: "HEYGEN_ASPECT_RATIO",
-        label: "HeyGen aspect ratio",
-        desc: "Aspect ratio for generated HeyGen clips.",
-        examples: "16:9 (default) · 9:16 · 1:1",
-      },
-      {
-        key: "HEYGEN_OUTPUT_FORMAT",
-        label: "HeyGen output format",
-        desc: "Output format for HeyGen clips.",
-        examples: "mp4 (default)",
-      },
-      {
-        key: "HEYGEN_CACHE",
-        label: "HeyGen cache",
-        desc: "When on, previously generated HeyGen clips can be reused instead of generated again.",
-        examples: "on (default) · off",
-      },
-    ],
-  },
-  {
-    title: "Two-Zone Timeline (Intro + Body)",
-    subtitle: "The video is built in two parts over one continuous voiceover: an engaging INTRO (real video + a few photos, fast pacing) followed by a slow, photo-only BODY with Ken-Burns zoom.",
-    fields: [
-      {
-        key: "INTRO_SECONDS",
-        label: "Intro length (seconds)",
-        desc: "How long the fast, engaging intro lasts. Everything spoken before this point uses intro pacing and may use video; everything after is the slow photo body. Set 0 for no intro (whole video = slow photos).",
-        examples: "150 = 2.5 min (default) · 120 = 2 min · 180 = 3 min · 0 = off",
-      },
-      {
-        key: "INTRO_CLIP_SECONDS",
-        label: "Intro: seconds per visual",
-        desc: "How often the picture changes during the intro. Lower = snappier.",
-        examples: "5 default · 4 snappier · 6 calmer",
-      },
-      {
-        key: "BODY_CLIP_SECONDS",
-        label: "Body: seconds per photo",
-        desc: "How often the photo changes during the slow body.",
-        examples: "15 default · 12 a touch faster · 20 slower",
-      },
-      {
-        key: "INTRO_PHOTO_RATIO",
-        label: "Intro photo / video mix (%)",
-        desc: "Percent of intro visuals that are still photos; the rest are moving video clips. The body is always photos. Lower = more video in the intro.",
-        examples: "20 default (mostly video) · 0 all video · 40 even mix",
-      },
-    ],
-  },
-  {
-    title: "Stock Footage (Pexels/Pixabay)",
-    subtitle: "How the app searches and picks stock video/photo b-roll.",
-    fields: [
-      {
-        key: "VIDEO_CONTEXT",
-        label: "Video context (optional)",
-        desc: "Short background hint about the setting/style of the video. Leave empty unless footage keeps going off-theme.",
-        examples: "Amish farmhouse kitchen, realistic warm light",
-        multiline: true,
-        maxLength: 300,
-      },
-      {
-        key: "FOOTAGE_SOURCES",
-        label: "Footage sources",
-        desc: "Comma-separated stock libraries to search.",
-        examples: "pexels,pixabay · pexels",
-      },
-      {
-        key: "FOOTAGE_AI_PICK",
-        label: "AI picks the best footage",
-        desc: "When on, Gemini Vision looks at candidate preview images and scores visual fit. If unavailable, the app falls back to text score.",
-        examples: "on · off",
-      },
-      {
-        key: "GEMINI_VISION_MODEL",
-        label: "Gemini Vision Model",
-        desc: "Gemini model used only for visual scoring of candidate thumbnails. Separate from the Script Breakdown model.",
-        examples: "gemini-2.5-flash (recommended) · gemini-flash-latest",
-      },
-      {
-        key: "PRODUCTION_MODE",
-        label: "Production Mode",
-        desc: "quality uses more search/vision for best matches. balanced is default. batch uses conservative limits and cache for bulk production.",
-        examples: "quality · balanced · batch",
-      },
-      {
-        key: "FOOTAGE_SEARCH_ATTEMPTS",
-        label: "Footage Search Attempts",
-        desc: "Number of search attempts per scene/clip before accepting the best available match.",
-        examples: "3 default · 2 batch",
-      },
-      {
-        key: "VISION_CONCURRENCY",
-        label: "Vision Concurrency",
-        desc: "Max parallel Gemini Vision calls.",
-        examples: "2 default · 1 batch",
-      },
-      {
-        key: "VISION_CANDIDATE_LIMIT",
-        label: "Vision Candidate Limit",
-        desc: "Max number of candidates sent to Gemini Vision per scene.",
-        examples: "8 default · 6 batch",
-      },
-      {
-        key: "VISION_COOLDOWN_ON_429_SEC",
-        label: "Vision Cooldown on 429",
-        desc: "Cooldown seconds after Gemini Vision hits rate limit.",
-        examples: "120 default",
-      },
-      {
-        key: "STOCK_FOOTAGE_ORIENTATION",
-        label: "Orientation",
-        desc: "Preferred stock footage orientation.",
-        examples: "landscape · portrait · square",
-      },
-      {
-        key: "STOCK_FOOTAGE_MAX_HEIGHT",
-        label: "Max clip height",
-        desc: "Caps downloaded stock clip resolution.",
-        examples: "720 · 1080 · 2160",
-      },
-      {
-        key: "STOCK_FOOTAGE_MIN_DURATION",
-        label: "Min clip duration",
-        desc: "Filters out clips shorter than this number of seconds.",
-        examples: "4 default · 6 longer",
-      },
-      {
-        key: "SCENE_PHOTO_RATIO",
-        label: "Photo / video mix (%)",
-        desc: "Percentage of scenes that use still photos with Ken Burns motion instead of moving video clips.",
-        examples: "0 video only · 40 default · 50 batch",
-      },
-      {
-        key: "SCENE_MIX_MODE",
-        label: "Photo distribution",
-        desc: "How photo scenes are distributed across the timeline.",
-        examples: "random · alternating",
-      },
-      {
-        key: "IMAGE_RATIO",
-        label: "Output aspect ratio",
-        desc: "Final video aspect ratio.",
-        examples: "16:9 · 9:16 · 1:1",
-      },
-    ],
-  },
-  {
-    title: "AI Image Fallback",
-    subtitle: "When NO relevant real photo is found, generate an on-topic image with AI, re-check it, and regenerate until it fits — instead of settling for a weak stock photo. Mostly affects the slow photo body. Real footage is always tried first.",
+    title: "AI Images (fallback)",
+    subtitle: "When NO relevant real photo is found, the app can generate an on-topic image, re-check it, and regenerate until it fits — instead of a weak stock photo. Real footage is always tried first. Mostly affects the slow photo body.",
     fields: [
       {
         key: "AI_FALLBACK_ENABLED",
-        label: "Enable AI fallback",
-        desc: "On = generate an AI photo only when no real photo is relevant enough. Off = always use the best available real photo (no AI, like before).",
-        examples: "on (default) · off",
+        label: "Use AI fallback",
+        desc: "On = generate an AI photo only when no real photo is relevant enough. Off = always use the best available real photo (no AI).",
+        type: "select",
+        options: [
+          { value: "on", label: "On — fill gaps with AI (recommended)" },
+          { value: "off", label: "Off — real photos only" },
+        ],
       },
       {
         key: "IMAGE_PROVIDER",
         label: "AI image provider",
-        desc: "Which service generates the AI photo. genaipro (default) uses your GenAIPro account's image credits — the same account as the voice. gemini uses your existing Google key (no extra key needed). kie uses kie.ai (Patrice's default — needs a separate kie.ai key). All produce the same Google nano-banana image family.",
-        examples: "genaipro (default) · gemini · kie",
-      },
-      {
-        key: "IMAGE_MODEL",
-        label: "Gemini image model",
-        desc: "Image model used when the provider is gemini.",
-        examples: "gemini-2.5-flash-image (default)",
+        desc: "Which service generates the AI photo. All produce the same Google nano-banana image family.",
+        type: "select",
+        options: [
+          { value: "genaipro", label: "GenAIPro (same key as voice)" },
+          { value: "gemini", label: "Gemini (uses your Google key)" },
+          { value: "kie", label: "kie.ai (separate kie.ai key)" },
+        ],
+        showIf: [{ key: "AI_FALLBACK_ENABLED", in: ["on"] }],
       },
       {
         key: "GENAIPRO_API_KEY",
-        label: "GenAIPro API key",
-        desc: "Your GenAIPro key. Used for AI images when provider is genaipro (and for the GenAIPro voice) — one key for the whole GenAIPro account.",
-        examples: "Paste locally only; never commit keys.",
+        label: "GenAIPro key (voice + images)",
+        desc: "Your GenAIPro key — same key as the voice. Needs Veo image credits.",
+        examples: "Paste locally only.",
+        showIf: [{ key: "IMAGE_PROVIDER", in: ["genaipro"] }],
       },
       {
         key: "GENAIPRO_IMAGE_MODEL",
         label: "GenAIPro image model",
-        desc: "Image model used when the provider is genaipro.",
+        desc: "Image model for GenAIPro.",
         examples: "nano_banana_pro (default) · nano_banana_2 · imagen_4",
+        showIf: [{ key: "IMAGE_PROVIDER", in: ["genaipro"] }],
+      },
+      {
+        key: "IMAGE_MODEL",
+        label: "Gemini image model",
+        desc: "Image model for Gemini.",
+        examples: "gemini-2.5-flash-image (default)",
+        showIf: [{ key: "IMAGE_PROVIDER", in: ["gemini"] }],
       },
       {
         key: "KIE_API_KEY",
-        label: "kie.ai API key",
-        desc: "Your kie.ai key. Used for AI images when provider is kie (Patrice's default — nano-banana via the kie.ai gateway).",
-        examples: "Paste locally only; never commit keys.",
+        label: "kie.ai key",
+        desc: "Your kie.ai key (only needed if you pick the kie provider).",
+        examples: "Paste locally only.",
+        showIf: [{ key: "IMAGE_PROVIDER", in: ["kie"] }],
       },
       {
         key: "KIE_IMAGE_MODEL",
         label: "kie.ai image model",
-        desc: "Image model used when the provider is kie.",
+        desc: "Image model for kie.ai.",
         examples: "google/nano-banana (default)",
+        showIf: [{ key: "IMAGE_PROVIDER", in: ["kie"] }],
       },
       {
         key: "AI_MATCH_THRESHOLD",
         label: "AI relevance bar (%)",
-        desc: "A generated image must score at least this (0-100) on the same relevance check, or it is regenerated.",
+        desc: "A generated image must score at least this on the relevance check, or it is regenerated.",
         examples: "60 default",
+        showIf: [{ key: "AI_FALLBACK_ENABLED", in: ["on"] }],
       },
       {
         key: "AI_REGEN_ATTEMPTS",
         label: "Max regenerations",
-        desc: "How many times to regenerate (a different composition each time) before keeping the best result.",
+        desc: "How many times to regenerate (different composition each time) before keeping the best.",
         examples: "3 default · 1-8",
+        showIf: [{ key: "AI_FALLBACK_ENABLED", in: ["on"] }],
       },
       {
         key: "AI_IMAGE_STYLE",
         label: "AI style hint (optional)",
-        desc: "Optional extra style words added to every AI image prompt. Leave empty for plain documentary realism.",
+        desc: "Optional extra style words for every AI image. Empty = plain documentary realism.",
         examples: "empty = documentary realism",
+        showIf: [{ key: "AI_FALLBACK_ENABLED", in: ["on"] }],
       },
     ],
   },
+
+  // ── 4. TWO-ZONE ──────────────────────────────────────────────────────────
   {
-    title: "Video Assembly (FFmpeg)",
-    subtitle: "Final stitching and rendering settings.",
+    title: "Two-Zone Timeline (Intro + Body)",
+    subtitle: "The video is built in two parts over one continuous voiceover: an engaging INTRO (real video + a few photos, fast) then a slow, photo-only BODY with Ken-Burns zoom.",
+    fields: [
+      {
+        key: "INTRO_SECONDS",
+        label: "Intro length (seconds)",
+        desc: "How long the fast, engaging intro lasts. Everything after is the slow photo body. Set 0 for no intro (whole video = slow photos).",
+        examples: "150 = 2.5 min (default) · 120 · 180 · 0 = off",
+      },
+      { key: "INTRO_CLIP_SECONDS", label: "Intro: seconds per visual", desc: "How often the picture changes during the intro.", examples: "5 default" },
+      { key: "BODY_CLIP_SECONDS", label: "Body: seconds per photo", desc: "How often the photo changes during the slow body.", examples: "15 default" },
+      {
+        key: "INTRO_PHOTO_RATIO",
+        label: "Intro photo / video mix (%)",
+        desc: "Percent of intro visuals that are photos; the rest are video clips. The body is always photos.",
+        examples: "20 default (mostly video) · 0 all video",
+      },
+    ],
+  },
+
+  // ── ADVANCED (all collapsed) ─────────────────────────────────────────────
+  {
+    title: "Voice — advanced",
+    collapsed: true,
+    subtitle: "Fine voice settings. Defaults are fine for most videos.",
+    fields: [
+      { key: "TTS_MODE", label: "Voice mode", desc: "single-shot records one continuous take and aligns it (recommended). per-scene records each scene separately (legacy).", type: "select", options: [{ value: "single-shot", label: "Single continuous take (recommended)" }, { value: "per-scene", label: "Per-scene (legacy)" }] },
+      { key: "TTS_MODEL", label: "TTS model", desc: "Model id for ElevenLabs-compatible engines.", examples: "eleven_multilingual_v2" },
+      { key: "TTS_VOICE_PROVIDER", label: "69labs voice path", desc: "Backend path for the 69labs engine.", examples: "elevenlabs · edgetts · voice-clone", showIf: [{ key: "TTS_PROVIDER", in: ["69labs"] }] },
+      { key: "MINIMAX_MODEL", label: "MiniMax model", desc: "MiniMax TTS model.", examples: "speech-02-hd", showIf: [{ key: "TTS_PROVIDER", in: ["minimax", "minimax-ai33pro"] }] },
+      { key: "MIN_SCENE_SECONDS", label: "Min seconds per shot", desc: "Shortest time a visual stays on screen before scenes merge (single-shot).", examples: "3 default" },
+      { key: "MAX_CLIP_SECONDS", label: "Max seconds per clip", desc: "Long segments split into clips up to this length (single-shot).", examples: "7 default" },
+      { key: "MAX_PAUSE_SECONDS", label: "Max pause between sentences", desc: "Caps long silences in the continuous voiceover.", examples: "0.6 default" },
+    ],
+  },
+  {
+    title: "Footage & relevance",
+    collapsed: true,
+    subtitle: "How the app searches and judges real stock footage. Defaults are tuned already.",
+    fields: [
+      { key: "VIDEO_CONTEXT", label: "Video context (optional)", desc: "Short hint about the setting/style. Helps keep footage on-theme. Leave empty unless it drifts.", examples: "WWII-era firearms, historical photos", multiline: true, maxLength: 300 },
+      { key: "FOOTAGE_SOURCES", label: "Footage sources", desc: "Comma-separated stock libraries to search.", examples: "pexels,pixabay,openverse,wikimedia" },
+      { key: "PIXABAY_API_KEY", label: "Pixabay key (optional)", desc: "Adds Pixabay as an extra source.", examples: "Get it at https://pixabay.com/api/docs/" },
+      { key: "OPENVERSE_TOKEN", label: "Openverse token (optional)", desc: "Optional — raises Openverse rate limits.", examples: "empty works (anonymous)" },
+      { key: "FOOTAGE_AI_PICK", label: "AI picks best footage", desc: "When on, Gemini Vision looks at candidate images and scores fit.", examples: "on · off" },
+      { key: "GEMINI_VISION_MODEL", label: "Gemini Vision model", desc: "Gemini model used for visual relevance scoring.", examples: "gemini-2.5-flash" },
+      { key: "PRODUCTION_MODE", label: "Production mode", desc: "quality = best matches · balanced (default) · batch = conservative for bulk.", examples: "quality · balanced · batch" },
+      { key: "FOOTAGE_SEARCH_ATTEMPTS", label: "Search attempts", desc: "Search attempts per scene before accepting the best.", examples: "3 default" },
+      { key: "VISION_CONCURRENCY", label: "Vision concurrency", desc: "Max parallel Gemini Vision calls.", examples: "4 default" },
+      { key: "VISION_CANDIDATE_LIMIT", label: "Vision candidate limit", desc: "Max candidates sent to Vision per scene.", examples: "12 default" },
+      { key: "VISION_COOLDOWN_ON_429_SEC", label: "Vision cooldown on rate-limit", desc: "Seconds to pause after a Gemini rate-limit.", examples: "120 default" },
+      { key: "STOCK_FOOTAGE_ORIENTATION", label: "Orientation", desc: "Preferred footage orientation.", examples: "landscape · portrait · square" },
+      { key: "STOCK_FOOTAGE_MAX_HEIGHT", label: "Max clip height", desc: "Caps downloaded clip resolution.", examples: "720 · 1080 · 2160" },
+      { key: "STOCK_FOOTAGE_MIN_DURATION", label: "Min clip duration", desc: "Filters out clips shorter than this (seconds).", examples: "4 default" },
+      { key: "SCENE_PHOTO_RATIO", label: "Photo / video mix (%)", desc: "Legacy per-scene mode only (the two-zone settings govern the real mix).", examples: "40 default" },
+      { key: "SCENE_MIX_MODE", label: "Photo distribution", desc: "How photo scenes are spread across the timeline.", examples: "random · alternating" },
+      { key: "IMAGE_RATIO", label: "Output aspect ratio", desc: "Final video aspect ratio.", examples: "16:9 · 9:16 · 1:1" },
+    ],
+  },
+  {
+    title: "Script breakdown (LLM)",
+    collapsed: true,
+    subtitle: "Which model splits the script into scenes. Default Gemini is fine.",
+    fields: [
+      { key: "SCENE_SPLIT_PROVIDER", label: "Provider", desc: "gemini (default) or an OpenAI-compatible provider.", examples: "gemini · openai" },
+      { key: "SCENE_SPLIT_MODEL", label: "Model id", desc: "Model for scene splitting.", examples: "gemini-2.5-flash (recommended)" },
+      { key: "OPENAI_API_KEY", label: "OpenAI-compatible key", desc: "Only if provider is openai (DeepSeek/OpenRouter/OpenAI).", examples: "", showIf: [{ key: "SCENE_SPLIT_PROVIDER", in: ["openai"] }] },
+      { key: "OPENAI_BASE_URL", label: "Custom base URL", desc: "Only if provider is openai.", examples: "https://api.deepseek.com", showIf: [{ key: "SCENE_SPLIT_PROVIDER", in: ["openai"] }] },
+    ],
+  },
+  {
+    title: "Storage & FFmpeg",
+    collapsed: true,
+    fields: [
+      { key: "RUNS_OUTPUT_DIR", label: "Output folder", desc: "Where finished videos are saved. Empty = default app data folder.", examples: "Mac: /Users/you/Documents/Conveyer-Runs · Windows: D:\\YouTube\\Conveyer-Runs" },
+      { key: "FFMPEG_PATH", label: "FFmpeg path", desc: "Only if FFmpeg is not on your system PATH.", examples: "Mac: /opt/homebrew/bin/ffmpeg · Windows: C:\\ffmpeg\\bin\\ffmpeg.exe" },
+    ],
+  },
+  {
+    title: "Video assembly",
+    collapsed: true,
     fields: [
       { key: "VIDEO_RESOLUTION", desc: "Final video resolution.", examples: "1920x1080 · 1280x720 · 3840x2160" },
       { key: "VIDEO_FPS", desc: "Frames per second.", examples: "24 · 30 · 60" },
-      { key: "TRANSITION_MIN", label: "Transition min", desc: "Shortest transition duration.", examples: "0.3 default" },
-      { key: "TRANSITION_MAX", label: "Transition max", desc: "Longest transition duration. Set 0 for hard cuts.", examples: "0.7 default · 0 hard cuts" },
-      { key: "SCENE_TAIL_SILENCE", label: "Pause between scenes", desc: "Per-scene mode only. Adds silence to separately generated scene audio.", examples: "0.4 default" },
+      { key: "TRANSITION_MIN", label: "Transition min", desc: "Shortest transition.", examples: "0.3 default" },
+      { key: "TRANSITION_MAX", label: "Transition max", desc: "Longest transition. 0 = hard cuts.", examples: "0.7 default · 0 hard cuts" },
+      { key: "SCENE_TAIL_SILENCE", label: "Pause between scenes", desc: "Per-scene mode only.", examples: "0.4 default" },
       { key: "SCENE_DURATION_SECONDS", desc: "Fallback clip duration when audio length is unknown.", examples: "5 default" },
     ],
   },
   {
-    title: "On-Screen Text (hook emphasis)",
-    subtitle: "Automatic captions for explicit numbers, years, money amounts, percentages, or measurements.",
+    title: "On-screen text",
+    collapsed: true,
+    subtitle: "Off by default (Ori's channels want no captions).",
     fields: [
-      { key: "TEXT_OVERLAY_MODE", label: "When to show captions", desc: "hook shows captions only in the opening. all allows them anywhere. off disables them.", examples: "hook · all · off" },
-      { key: "TEXT_OVERLAY_HOOK_SECONDS", label: "Hook length", desc: "When mode is hook, captions appear only within this many seconds from the start.", examples: "30 default" },
-      { key: "TEXT_OVERLAY_FONT", label: "Caption font", desc: "Absolute path to a .ttf/.otf font. Leave empty for auto-detection.", examples: "empty = auto" },
-      { key: "CAPTION_LEAD_IN_SEC", label: "Caption lead-in", desc: "How early captions may appear before the spoken word.", examples: "0 default · 0.1 max" },
-      { key: "CAPTION_TRAIL_SEC", label: "Caption trail", desc: "How long captions remain after the spoken word.", examples: "0.35 default" },
-      { key: "CAPTION_FONT_SIZE_PERCENT", label: "Caption font size (%)", desc: "Caption font size as a percent of video height.", examples: "13 default · 15 larger" },
-      { key: "CAPTION_POSITION_Y_PERCENT", label: "Caption vertical position (%)", desc: "Vertical position as a percent of video height.", examples: "72 default" },
-      { key: "CAPTION_DETECTION_MODE", label: "Caption detection mode", desc: "literal detects only explicit values. off disables auto captions.", examples: "literal · off" },
+      { key: "TEXT_OVERLAY_MODE", label: "Captions", desc: "off (default) · hook = opening only · all = anywhere.", type: "select", options: [{ value: "off", label: "Off (default)" }, { value: "hook", label: "Opening only (hook)" }, { value: "all", label: "Anywhere" }] },
+      { key: "TEXT_OVERLAY_HOOK_SECONDS", label: "Hook length", desc: "For hook mode: captions only within this many seconds.", examples: "30 default", showIf: [{ key: "TEXT_OVERLAY_MODE", in: ["hook"] }] },
+      { key: "TEXT_OVERLAY_FONT", label: "Caption font", desc: "Path to a .ttf/.otf font. Empty = auto.", examples: "empty = auto", showIf: [{ key: "TEXT_OVERLAY_MODE", in: ["hook", "all"] }] },
+      { key: "CAPTION_LEAD_IN_SEC", label: "Caption lead-in", desc: "How early captions appear before the word.", examples: "0 default", showIf: [{ key: "TEXT_OVERLAY_MODE", in: ["hook", "all"] }] },
+      { key: "CAPTION_TRAIL_SEC", label: "Caption trail", desc: "How long captions stay after the word.", examples: "0.35 default", showIf: [{ key: "TEXT_OVERLAY_MODE", in: ["hook", "all"] }] },
+      { key: "CAPTION_FONT_SIZE_PERCENT", label: "Caption size (%)", desc: "Font size as % of video height.", examples: "13 default", showIf: [{ key: "TEXT_OVERLAY_MODE", in: ["hook", "all"] }] },
+      { key: "CAPTION_POSITION_Y_PERCENT", label: "Caption vertical (%)", desc: "Vertical position as % of height.", examples: "72 default", showIf: [{ key: "TEXT_OVERLAY_MODE", in: ["hook", "all"] }] },
+      { key: "CAPTION_DETECTION_MODE", label: "Detection", desc: "literal = only explicit values · off.", examples: "literal · off", showIf: [{ key: "TEXT_OVERLAY_MODE", in: ["hook", "all"] }] },
     ],
   },
   {
-    title: "Step Overlays",
-    subtitle: "Animated step title overlays such as STEP 1 / COLLECT & CHOP SCRAPS.",
+    title: "Step overlays",
+    collapsed: true,
+    subtitle: "Animated STEP titles (only if your script uses 'Step 1: ...' lines).",
     fields: [
-      { key: "STEP_OVERLAY_TRAIL_SEC", label: "Step overlay trail", desc: "How long the step overlay remains after the spoken step title finishes.", examples: "1.0 default" },
-      { key: "STEP_OVERLAY_ANIMATION", label: "Step overlay animation", desc: "Animation style for step overlay entrance/exit.", examples: "slide-up · fade · none" },
-      { key: "STEP_OVERLAY_ENTER_SEC", label: "Entrance duration", desc: "Duration of the entrance animation.", examples: "0.35 default" },
-      { key: "STEP_OVERLAY_EXIT_SEC", label: "Exit duration", desc: "Duration of the exit fade animation.", examples: "0.25 default" },
+      { key: "STEP_OVERLAY_TRAIL_SEC", label: "Trail", desc: "How long the step title stays after it's spoken.", examples: "1.0 default" },
+      { key: "STEP_OVERLAY_ANIMATION", label: "Animation", desc: "Entrance/exit style.", examples: "slide-up · fade · none" },
+      { key: "STEP_OVERLAY_ENTER_SEC", label: "Entrance", desc: "Entrance duration.", examples: "0.35 default" },
+      { key: "STEP_OVERLAY_EXIT_SEC", label: "Exit", desc: "Exit duration.", examples: "0.25 default" },
     ],
   },
   {
-    title: "Performance (Concurrency)",
-    subtitle: "Parallel job limits. Lower values are slower but gentler on API limits.",
+    title: "Performance",
+    collapsed: true,
+    subtitle: "Parallel job limits. Lower = slower but gentler on rate limits.",
     fields: [
-      { key: "TTS_CONCURRENCY", desc: "Simultaneous TTS jobs.", examples: "3 default" },
-      { key: "ANIMATION_CONCURRENCY", desc: "Simultaneous stock footage jobs.", examples: "5 default · 2 batch" },
-      { key: "ASSEMBLE_CONCURRENCY", desc: "Simultaneous FFmpeg clip renders.", examples: "4 default" },
+      { key: "TTS_CONCURRENCY", desc: "Simultaneous voice jobs.", examples: "3 default" },
+      { key: "ANIMATION_CONCURRENCY", desc: "Simultaneous footage jobs.", examples: "5 default" },
+      { key: "ASSEMBLE_CONCURRENCY", desc: "Simultaneous FFmpeg renders.", examples: "4 default" },
     ],
   },
   {
     title: "Reliability",
-    subtitle: "Failure handling.",
+    collapsed: true,
     fields: [
-      { key: "FAILURE_THRESHOLD_PERCENT", desc: "If more than this percent of scenes fail, the run aborts.", examples: "25 default" },
+      { key: "FAILURE_THRESHOLD_PERCENT", desc: "Abort the run if more than this percent of scenes fail.", examples: "25 default" },
     ],
   },
 ];
