@@ -71,6 +71,16 @@ export const SETTING_KEYS = [
   "BODY_CLIP_SECONDS",         // body: how often the photo changes (slow, default 15s)
   "INTRO_PHOTO_RATIO",         // intro: % of visuals that are photos (rest = video); the body is always photo
 
+  // ── AI image fallback (only when no relevant REAL photo is found) ──
+  "AI_FALLBACK_ENABLED",       // on (default) | off — generate an AI photo when real footage is too weak
+  "IMAGE_PROVIDER",            // gemini (default, uses GOOGLE_API_KEY) | genaipro (uses GENAIPRO_API_KEY)
+  "IMAGE_MODEL",               // gemini image model, e.g. gemini-2.5-flash-image
+  "GENAIPRO_API_KEY",          // GenAIPro key — AI images (genaipro provider) AND the GenAIPro voice (one key)
+  "GENAIPRO_IMAGE_MODEL",      // nano_banana_pro | nano_banana_2 | imagen_4
+  "AI_MATCH_THRESHOLD",        // 0-100: a generated image must score this on the relevance check or it is regenerated
+  "AI_REGEN_ATTEMPTS",         // 1-8: how many times to regenerate before keeping the best
+  "AI_IMAGE_STYLE",            // optional extra style words appended to every AI image prompt
+
   // ── Video assembly (FFmpeg) ───────────────────────────────────────
   "VIDEO_RESOLUTION",
   "VIDEO_FPS",
@@ -238,6 +248,16 @@ export const DEFAULTS: Record<SettingKey, string> = {
   INTRO_CLIP_SECONDS: "5",
   BODY_CLIP_SECONDS: "15",
   INTRO_PHOTO_RATIO: "20",
+
+  // AI image fallback
+  AI_FALLBACK_ENABLED: "on",
+  IMAGE_PROVIDER: "gemini",
+  IMAGE_MODEL: "gemini-2.5-flash-image",
+  GENAIPRO_API_KEY: "",
+  GENAIPRO_IMAGE_MODEL: "nano_banana_pro",
+  AI_MATCH_THRESHOLD: "60",
+  AI_REGEN_ATTEMPTS: "3",
+  AI_IMAGE_STYLE: "",
 
   // Video assembly
   VIDEO_RESOLUTION: "1920x1080",

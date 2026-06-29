@@ -7,6 +7,7 @@ import { getSetting } from "../settings";
 import { log } from "../logger";
 import { checkCancelled } from "../cancellation";
 import type { Scene } from "./scene-split";
+import { tryAiPhotoFallback } from "./ai-image";
 
 /**
  * Pexels stock footage service — search + download.
@@ -1518,11 +1519,13 @@ async function aiScoreHitsByVision(
     const parts: unknown[] = [
       {
         text:
-          `You are choosing B-roll footage for ONE moment of a video.\n` +
-          (videoContext ? `The whole video is about: "${videoContext.slice(0, 300)}".\n` : "") +
-          `This moment's narration: "${sceneText.slice(0, 300)}".\n\n` +
-          `${usable.length} candidate images follow, each labelled "index N". LOOK AT EACH IMAGE and score 0-100 how well what is ACTUALLY SHOWN fits this moment AND the video's overall context. Judge only by the visible content, not by any text.\n` +
-          `CRITICAL RULE: an image that merely LOOKS similar but belongs to a DIFFERENT real-world domain than the video's topic is WRONG — score it 20 or below. The subject must plausibly belong to THIS video's topic, not just resemble the words (e.g. for a video about OLD / antique tools, a modern power drill or an unrelated workshop product is off-topic even if it is "a tool"). 100 = exactly the wanted subject AND on-topic; 0 = wrong subject, wrong era / domain / region, off-topic, or low quality.\n` +
+          `You are choosing the single best B-roll for ONE moment of a documentary video.\n` +
+          (videoContext ? `OVERALL VIDEO TOPIC: "${videoContext.slice(0, 300)}".\n` : "") +
+          `THIS MOMENT (narration): "${sceneText.slice(0, 300)}".\n\n` +
+          `${usable.length} candidates follow, each labelled "index N" with its preview image. LOOK AT EACH IMAGE and score 0-100 how well what is ACTUALLY SHOWN fits this moment AND the overall topic. Judge only by visible content, never by any text.\n` +
+          `Apply these criteria in order: (1) semantic relevance to this moment AND the topic [PRIMARY]; (2) prefer cinematic documentary shots — wide, establishing, aerial, clean composition; (3) penalize static single-subject snapshots, amateur quality, cluttered or low-resolution framing.\n` +
+          `DOMAIN RULE: an image that merely LOOKS similar but belongs to a DIFFERENT real-world domain, ERA or region than the topic is WRONG — score it 20 or below (e.g. for a video about ANTIQUE firearms, a modern handgun or an unrelated workshop product is off-topic even if it is "a gun"). BUT do NOT penalize footage merely for lacking the EXACT brand, model, label or precise year — stock libraries rarely have those, and generic SAME-CATEGORY footage is valid supporting B-roll.\n` +
+          `SCORING BANDS: 100 = exactly the wanted subject, on-topic, well shot; 85-95 = correct domain AND highly usable; 75-84 = same subject CATEGORY (strong supporting B-roll); 40-74 = only loosely related; 0-39 = wrong domain/era/region, misleading, or low quality.\n` +
           `Return STRICTLY a JSON array [{"i":<N>,"score":<int>}] covering all ${usable.length}. No markdown.`,
       },
     ];
@@ -1831,6 +1834,12 @@ async function acquireFootage(
       const got = await tryList(atTier);
       if (got) return got;
     }
+    // No real photo is relevant enough → try an AI-generated image (re-scored +
+    // regenerated until on-topic) before settling for a weak real one. Photos only.
+    if (kind === "photo") {
+      const ai = await tryAiPhotoFallback(runId, scene, videoContext, outPath, pool[0]?.score ?? 0);
+      if (ai) return ai;
+    }
     // Below every tier — take the single best rather than fail the scene.
     log(runId, "warn", `Scene #${scene.index}: weak match only — using best available (${((pool[0]?.score ?? 0) * 100).toFixed(0)}%)`, {
       stage: "animate",
@@ -1846,6 +1855,13 @@ async function acquireFootage(
     });
     const got = await tryList(pool, true);
     if (got) return got;
+  }
+
+  // Nothing real matched at all → for photos, generate an AI image rather than
+  // fail the scene (no real candidates means the best real score is 0).
+  if (kind === "photo") {
+    const ai = await tryAiPhotoFallback(runId, scene, videoContext, outPath, 0);
+    if (ai) return ai;
   }
 
   const tried = baseQueries.map((q) => `"${q}"`).join(", ");

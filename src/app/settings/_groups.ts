@@ -367,6 +367,60 @@ export const ALL_GROUPS: Group[] = [
     ],
   },
   {
+    title: "AI Image Fallback",
+    subtitle: "When NO relevant real photo is found, generate an on-topic image with AI, re-check it, and regenerate until it fits — instead of settling for a weak stock photo. Mostly affects the slow photo body. Real footage is always tried first.",
+    fields: [
+      {
+        key: "AI_FALLBACK_ENABLED",
+        label: "Enable AI fallback",
+        desc: "On = generate an AI photo only when no real photo is relevant enough. Off = always use the best available real photo (no AI, like before).",
+        examples: "on (default) · off",
+      },
+      {
+        key: "IMAGE_PROVIDER",
+        label: "AI image provider",
+        desc: "gemini uses your existing Google key — no extra setup (recommended). genaipro uses your GenAIPro account's image credits.",
+        examples: "gemini (default) · genaipro",
+      },
+      {
+        key: "IMAGE_MODEL",
+        label: "Gemini image model",
+        desc: "Image model used when the provider is gemini.",
+        examples: "gemini-2.5-flash-image (default)",
+      },
+      {
+        key: "GENAIPRO_API_KEY",
+        label: "GenAIPro API key",
+        desc: "Your GenAIPro key. Used for AI images when provider is genaipro (and for the GenAIPro voice) — one key for the whole GenAIPro account.",
+        examples: "Paste locally only; never commit keys.",
+      },
+      {
+        key: "GENAIPRO_IMAGE_MODEL",
+        label: "GenAIPro image model",
+        desc: "Image model used when the provider is genaipro.",
+        examples: "nano_banana_pro (default) · nano_banana_2 · imagen_4",
+      },
+      {
+        key: "AI_MATCH_THRESHOLD",
+        label: "AI relevance bar (%)",
+        desc: "A generated image must score at least this (0-100) on the same relevance check, or it is regenerated.",
+        examples: "60 default",
+      },
+      {
+        key: "AI_REGEN_ATTEMPTS",
+        label: "Max regenerations",
+        desc: "How many times to regenerate (a different composition each time) before keeping the best result.",
+        examples: "3 default · 1-8",
+      },
+      {
+        key: "AI_IMAGE_STYLE",
+        label: "AI style hint (optional)",
+        desc: "Optional extra style words added to every AI image prompt. Leave empty for plain documentary realism.",
+        examples: "empty = documentary realism",
+      },
+    ],
+  },
+  {
     title: "Video Assembly (FFmpeg)",
     subtitle: "Final stitching and rendering settings.",
     fields: [
