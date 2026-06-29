@@ -138,6 +138,22 @@ a `genaipro` client; reference impl exists in Conveyer Treso
 `pipeline.ts`, `img2vid.ts`, `video-assemble.ts`, `settings.ts`, `_groups.ts`,
 `scene-split.ts`. Voice config is just settings keys (stable API).
 
+> **`GENAIPRO_API_KEY` already exists in settings** — it was added for the AI
+> image fallback (`services/ai-image.ts`, GenAIPro `nano_banana_pro` image
+> provider). The GenAIPro **voice** wiring must **reuse that same key**, not add a
+> duplicate (one key = the whole GenAIPro account: voice + Veo image credits).
+
+## AI image fallback (services/ai-image.ts) — real-first, no "AI slop"
+
+The stock cascade always tries REAL footage first. Only when **no real photo**
+clears the lowest vision tier does `tryAiPhotoFallback` kick in (wired into
+`stock-footage.ts` `acquireFootage`, **photos only**): generate an image →
+re-score with the SAME Gemini vision check → regenerate (different composition)
+until it clears `AI_MATCH_THRESHOLD` or `AI_REGEN_ATTEMPTS` run out → keep the
+best, and use it only if it scores ≥ the weak real match. Providers: **gemini**
+(default, `gemini-2.5-flash-image`, uses `GOOGLE_API_KEY`) or **genaipro**
+(`nano_banana_pro`). Falls back to real if no key / all gens fail.
+
 ---
 
 ## Key files
