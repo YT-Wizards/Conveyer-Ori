@@ -65,6 +65,12 @@ export const SETTING_KEYS = [
   "SCENE_MIX_MODE",            // random | alternating
   "IMAGE_RATIO",               // 16:9 | 9:16 | 1:1
 
+  // ── Two-zone timeline (intro vs body) ─────────────────────────────
+  "INTRO_SECONDS",             // length of the engaging intro zone (seconds); 0 = no intro (whole video = body)
+  "INTRO_CLIP_SECONDS",        // intro: how often the visual changes (fast, default 5s)
+  "BODY_CLIP_SECONDS",         // body: how often the photo changes (slow, default 15s)
+  "INTRO_PHOTO_RATIO",         // intro: % of visuals that are photos (rest = video); the body is always photo
+
   // ── Video assembly (FFmpeg) ───────────────────────────────────────
   "VIDEO_RESOLUTION",
   "VIDEO_FPS",
@@ -226,6 +232,12 @@ export const DEFAULTS: Record<SettingKey, string> = {
   SCENE_PHOTO_RATIO: "40",
   SCENE_MIX_MODE: "random",
   IMAGE_RATIO: "16:9",
+
+  // Two-zone timeline (intro vs body)
+  INTRO_SECONDS: "150",
+  INTRO_CLIP_SECONDS: "5",
+  BODY_CLIP_SECONDS: "15",
+  INTRO_PHOTO_RATIO: "20",
 
   // Video assembly
   VIDEO_RESOLUTION: "1920x1080",

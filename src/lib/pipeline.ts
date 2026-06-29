@@ -275,12 +275,16 @@ async function runSingleShot(
   const globalAudio = await synthesizeAndAlign(runId, scenes, audioDir, {});
   checkCancelled(runId);
 
-  // 2. Scene-mix decision: which scenes use a still photo (ken-burns) vs video.
-  const photoRatio = Math.max(0, Math.min(100, Number(getSetting("SCENE_PHOTO_RATIO") || "40")));
+  // 2. Two-zone timeline: an engaging INTRO (real video + a few photos, fast
+  //    pacing) then a slow PHOTO-ONLY body with Ken-Burns zoom. A segment is
+  //    "intro" when its aligned start is before INTRO_SECONDS (0 = no intro).
+  const introMs = Math.max(0, Number(getSetting("INTRO_SECONDS") || "150")) * 1000;
+  const introClipSec = Math.max(0, Number(getSetting("INTRO_CLIP_SECONDS") || "5"));
+  const bodyClipSec = Math.max(0, Number(getSetting("BODY_CLIP_SECONDS") || "15"));
   const mixMode = (getSetting("SCENE_MIX_MODE") || "random") as "random" | "alternating";
-  const photoScenes = pickPhotoScenes(scenes, photoRatio, mixMode);
-
-  const maxClipSec = Math.max(0, Number(getSetting("MAX_CLIP_SECONDS") || "7"));
+  // Photo/video mix WITHIN the intro only — the body is forced to photo per-segment below.
+  const introPhotoRatio = Math.max(0, Math.min(100, Number(getSetting("INTRO_PHOTO_RATIO") || "20")));
+  const introPhotoScenes = pickPhotoScenes(scenes, introPhotoRatio, mixMode);
   const minSceneMs = Math.max(0, Number(getSetting("MIN_SCENE_SECONDS") || "3")) * 1000;
   const rangeByScene = new Map<number, SceneAudioRange>();
   for (const r of globalAudio.ranges) rangeByScene.set(r.sceneIdx, r);
@@ -311,16 +315,25 @@ async function runSingleShot(
   }
   const mergedAway = scenes.length - segments.length;
 
-  // 4. Build the sub-clip plan from segments. A segment longer than
-  //    MAX_CLIP_SECONDS is split into equal sub-clips, each getting its OWN
-  //    Pexels asset, so a long segment still keeps the picture moving.
+  // 4. Build the sub-clip plan from segments, applying the two zones. Each
+  //    segment is intro or body by its aligned start; the zone decides BOTH the
+  //    lane (intro = video + a few photos · body = photo-only Ken-Burns) AND the
+  //    pacing (a segment longer than the zone's clip length is split into equal
+  //    sub-clips, each getting its own asset, so the picture keeps moving).
   const plans: SubClipPlan[] = [];
+  let introSegs = 0;
+  let bodySegs = 0;
   for (const seg of segments) {
     const scene = seg.scene;
-    const mode: AssetMode = photoScenes.has(scene.index) ? "photo" : "video";
+    const isBody = seg.startMs >= introMs;
+    if (isBody) bodySegs++; else introSegs++;
+    // LANE: body is always a Ken-Burns photo; the intro mixes video + a few photos.
+    const mode: AssetMode = isBody ? "photo" : (introPhotoScenes.has(scene.index) ? "photo" : "video");
+    // PACING: how often the picture changes in this zone.
+    const zoneClipSec = isBody ? bodyClipSec : introClipSec;
     const sliceMs = Math.max(0, seg.endMs - seg.startMs);
     const sliceSec = sliceMs / 1000;
-    const segCount = maxClipSec > 0 && sliceSec > maxClipSec ? Math.ceil(sliceSec / maxClipSec) : 1;
+    const segCount = zoneClipSec > 0 && sliceSec > zoneClipSec ? Math.ceil(sliceSec / zoneClipSec) : 1;
     const padded = String(scene.index).padStart(3, "0");
 
     if (segCount <= 1) {
@@ -339,14 +352,15 @@ async function runSingleShot(
   }
 
   const splitScenes = new Set(plans.filter((p) => p.fileStem.includes("_sub_")).map((p) => p.scene.index)).size;
+  const photoPlans = plans.filter((p) => p.mode === "photo").length;
   log(
     runId,
     "info",
-    `${scenes.length} scenes → ${segments.length} visual segments (≥${minSceneMs / 1000}s each` +
-      (mergedAway > 0 ? `, ${mergedAway} short scene(s) merged` : "") +
-      `) → ${plans.length} Pexels clip(s)` +
-      (splitScenes > 0 ? ` (${splitScenes} long segment(s) split, ${maxClipSec}s max each)` : "") +
-      ` · ${photoScenes.size} photo / ${scenes.length - photoScenes.size} video`,
+    `${scenes.length} scenes → ${segments.length} segments → ${plans.length} clip(s)` +
+      (mergedAway > 0 ? ` · ${mergedAway} short scene(s) merged` : "") +
+      (splitScenes > 0 ? ` · ${splitScenes} long segment(s) split` : "") +
+      ` · zones: ${introSegs} intro (~${introClipSec}s, video+photo) / ${bodySegs} body (~${bodyClipSec}s, photo-only)` +
+      ` · ${photoPlans} photo / ${plans.length - photoPlans} video clip(s)`,
     { stage: "pipeline" }
   );
 

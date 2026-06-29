@@ -239,6 +239,36 @@ export const ALL_GROUPS: Group[] = [
     ],
   },
   {
+    title: "Two-Zone Timeline (Intro + Body)",
+    subtitle: "The video is built in two parts over one continuous voiceover: an engaging INTRO (real video + a few photos, fast pacing) followed by a slow, photo-only BODY with Ken-Burns zoom.",
+    fields: [
+      {
+        key: "INTRO_SECONDS",
+        label: "Intro length (seconds)",
+        desc: "How long the fast, engaging intro lasts. Everything spoken before this point uses intro pacing and may use video; everything after is the slow photo body. Set 0 for no intro (whole video = slow photos).",
+        examples: "150 = 2.5 min (default) · 120 = 2 min · 180 = 3 min · 0 = off",
+      },
+      {
+        key: "INTRO_CLIP_SECONDS",
+        label: "Intro: seconds per visual",
+        desc: "How often the picture changes during the intro. Lower = snappier.",
+        examples: "5 default · 4 snappier · 6 calmer",
+      },
+      {
+        key: "BODY_CLIP_SECONDS",
+        label: "Body: seconds per photo",
+        desc: "How often the photo changes during the slow body.",
+        examples: "15 default · 12 a touch faster · 20 slower",
+      },
+      {
+        key: "INTRO_PHOTO_RATIO",
+        label: "Intro photo / video mix (%)",
+        desc: "Percent of intro visuals that are still photos; the rest are moving video clips. The body is always photos. Lower = more video in the intro.",
+        examples: "20 default (mostly video) · 0 all video · 40 even mix",
+      },
+    ],
+  },
+  {
     title: "Stock Footage (Pexels/Pixabay)",
     subtitle: "How the app searches and picks stock video/photo b-roll.",
     fields: [
