@@ -241,7 +241,7 @@ export const DEFAULTS: Record<SettingKey, string> = {
   GENAIPRO_IMAGE_MODEL: "nano_banana_pro",
   KIE_API_KEY: "",
   KIE_IMAGE_MODEL: "google/nano-banana",
-  AI_MATCH_THRESHOLD: "60",
+  AI_MATCH_THRESHOLD: "80",
   AI_REGEN_ATTEMPTS: "3",
   AI_IMAGE_STYLE: "",
 
