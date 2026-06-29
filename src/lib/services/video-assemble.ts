@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import ffmpeg from "fluent-ffmpeg";
 import { getSetting } from "../settings";
 import { log } from "../logger";
@@ -150,6 +151,30 @@ function ensureFfmpegPaths(): void {
 export function resolveFfmpegBinary(): string {
   const ffmpegPath = getSetting("FFMPEG_PATH");
   return ffmpegPath && ffmpegPath.trim() ? ffmpegPath.trim() : "ffmpeg";
+}
+
+/**
+ * Whether this ffmpeg build has the `drawtext` filter (requires libfreetype).
+ * Some builds (e.g. a minimal Homebrew ffmpeg) omit it — without this guard a
+ * scene carrying a text overlay would crash the entire render. Cached.
+ */
+let _hasDrawtext: boolean | null = null;
+function hasDrawtext(): boolean {
+  if (_hasDrawtext !== null) return _hasDrawtext;
+  try {
+    const out = spawnSync(resolveFfmpegBinary(), ["-hide_banner", "-filters"], { encoding: "utf-8", timeout: 10000 });
+    _hasDrawtext = /(^|\s)drawtext\s/m.test(out.stdout || "");
+  } catch {
+    _hasDrawtext = false;
+  }
+  return _hasDrawtext;
+}
+let _drawtextWarned = false;
+function warnNoDrawtext(): void {
+  if (_drawtextWarned) return;
+  _drawtextWarned = true;
+  // eslint-disable-next-line no-console
+  console.warn("[assembly] ffmpeg has no 'drawtext' filter (libfreetype missing) — on-screen text overlays are skipped. Install an ffmpeg build with libfreetype to enable them.");
 }
 
 /**
@@ -503,6 +528,12 @@ function withOverlay(
   h: number,
   durationSec: number
 ): string {
+  // Degrade gracefully on ffmpeg builds without drawtext (no libfreetype):
+  // skip the overlay rather than crash the whole clip render.
+  if ((overlay || stepOverlay) && !hasDrawtext()) {
+    warnNoDrawtext();
+    return videoFilter;
+  }
   let filter = videoFilter;
   if (stepOverlay) {
     const dt = buildStepOverlayDrawtext(stepOverlay, w, h, durationSec);

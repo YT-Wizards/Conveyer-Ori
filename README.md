@@ -1,339 +1,265 @@
-# Conveyer — Complete Guide
+# Conveyer Ori — Complete Guide
 
-**Turn a written script into a finished, ready-to-upload YouTube video — on your own computer.**
+**Turn a written script into a finished, ready-to-upload long-form YouTube video — on your own computer.**
 
-Conveyer takes your script and automatically:
-1. Splits it into scenes (Google Gemini),
-2. Records the **whole narration in one continuous take** with an ElevenLabs voice (via ai33.pro),
-3. Lines the narration up to each scene using **Groq** (so sentences are never cut in half),
-4. Pulls matching **real stock footage** — video clips and still photos with a smooth zoom — from **Pexels**,
-5. Stitches it all into one MP4 with FFmpeg.
+You paste a script. The app automatically:
 
-Everything runs **locally** on your machine. No monthly subscription — just a few cents of API usage per video (often free). Reference style: faceless documentary / storytelling channels.
+1. Splits it into scenes.
+2. Finds **real video clips and photos** that match what each scene is about.
+3. Records **one continuous AI voiceover** of your whole script.
+4. Assembles everything into a finished **MP4** video file.
 
-> **New here? Just follow the steps in order — no coding needed.** It takes about 30 minutes the first time.
+It runs **entirely on your own computer** — there is no website to log into and nothing is uploaded anywhere. Your scripts, settings and videos stay on your machine.
+
+---
+
+## What kind of video it makes (the "two zones")
+
+This tool is built for **long (up to ~1 hour) documentary-style** videos with two parts:
+
+- **🎬 The intro (first ~2–3 minutes): fast and engaging.** The picture changes quickly (about every 5 seconds) and uses a **mix of real video clips and photos** matched to your words — just like the first minutes of the big channels in this niche.
+- **🖼️ The body (the rest of the video): slow and calm.** **Photos only**, each with a gentle slow zoom (the "Ken-Burns" effect), changing about every 15 seconds.
+
+You can change where the intro ends, how fast each part moves, and the photo/video mix — all from the **Settings** page (see "[The Two-Zone settings](#the-two-zone-settings)" below). No editing skills needed.
 
 ---
 
 ## Table of contents
-- [What you need](#what-you-need)
-- [Step 1 — Download Conveyer](#step-1--download-conveyer)
-- [Step 2 — Install Node.js](#step-2--install-nodejs)
-- [Step 3 — Install FFmpeg](#step-3--install-ffmpeg)
-- [Step 4 — Install Conveyer](#step-4--install-conveyer)
-- [Step 5 — Get your API keys](#step-5--get-your-api-keys)
-- [Step 6 — Launch the app](#step-6--launch-the-app)
-- [Step 7 — First-time settings](#step-7--first-time-settings)
-- [Step 8 — Make your first video](#step-8--make-your-first-video)
-- [Picking a voice](#picking-a-voice)
-- [How the voiceover works](#how-the-voiceover-works)
-- [Aspect ratio (16:9 vs Shorts)](#aspect-ratio-169-vs-shorts)
-- [All settings explained](#all-settings-explained)
-- [Where your videos are saved](#where-your-videos-are-saved)
-- [Troubleshooting](#troubleshooting)
-- [Costs](#costs)
-- [Updating](#updating)
+
+1. [Before you start — what you need](#1-before-you-start--what-you-need)
+2. [Installing the app](#2-installing-the-app)
+3. [Starting the app](#3-starting-the-app)
+4. [First-time setup — entering your keys](#4-first-time-setup--entering-your-keys)
+5. [Making your first video](#5-making-your-first-video)
+6. [The Two-Zone settings](#the-two-zone-settings)
+7. [Where your videos are saved](#6-where-your-videos-are-saved)
+8. [Check that everything works (no keys needed)](#7-check-that-everything-works-no-keys-needed)
+9. [Updating to a new version](#8-updating-to-a-new-version)
+10. [Stopping the app](#9-stopping-the-app)
+11. [Troubleshooting](#10-troubleshooting)
+12. [Frequently asked questions](#11-frequently-asked-questions)
 
 ---
 
-## What you need
+## 1. Before you start — what you need
 
-- A computer: **Windows 10+**, **macOS 11+**, or modern Linux.
-- About **30 minutes** for first-time setup.
-- A reliable internet connection.
-- ~**1 GB** of free disk space.
-- **Four accounts** (Step 5) — three are free, one is cheap pay-as-you-go:
-  - Google AI Studio — **free**
-  - Pexels — **free**
-  - Groq — **free**
-  - ai33.pro — **cheap** (pay-as-you-go, ~$5 lasts a long time)
+You need **four** things installed/ready before the app will make videos. Take them one at a time — it's a one-time setup.
 
----
+### a) A computer
+A **Mac** or a **Windows** PC. (The app works the same on both.)
 
-## Step 1 — Download Conveyer
+### b) Node.js (version 20 or newer)
+This is the engine the app runs on. It's free.
 
-On the GitHub page for this project:
+- Go to **https://nodejs.org**
+- Download the big green **"LTS"** button.
+- Open the downloaded file and click **Next → Next → Install** (accept the defaults).
+- That's it. You won't see an app open — Node.js works in the background.
 
-1. Click the green **`< > Code`** button (top right of the file list).
-2. Click **Download ZIP**.
-3. Unzip it somewhere you'll remember, e.g. `C:\Conveyer\` (Windows) or `~/Documents/Conveyer/` (Mac).
+### c) FFmpeg
+This is the free tool that actually builds the video file.
 
-You'll get a folder containing `install`, `start`, and `stop` files plus the app code.
+- **On a Mac:** the easiest way is with Homebrew. Open the **Terminal** app and paste:
+  ```
+  brew install ffmpeg
+  ```
+  (If `brew` isn't installed, get it first from **https://brew.sh** — paste the one line on that page into Terminal.)
+- **On Windows:** download a build from **https://www.gyan.dev/ffmpeg/builds/** (the "full" release `ffmpeg-release-full.7z`), unzip it, and either:
+  - put the `ffmpeg.exe` file's folder on your system PATH, **or**
+  - just note where `ffmpeg.exe` is — you can paste its full path into the app's Settings later (the **FFmpeg path** field).
 
-> Prefer git? `git clone https://github.com/Bander4ik/Conveyer-Guilherme.git` — but the ZIP is easier if you're not technical.
+> 💡 **Tip:** for **on-screen text** (captions/titles) you need an FFmpeg build that includes "libfreetype". The "full" Windows build above has it; on Mac, `brew install ffmpeg` usually has it. If yours doesn't, the video still renders fine — it just skips any on-screen text. (Ori's channels run with text **off** by default, so this won't affect you unless you turn captions on.)
 
----
+### d) Your API keys
+The app uses a few online services to do the smart parts. You paste these keys into the app **once** (in Settings). Each is free or low-cost to start.
 
-## Step 2 — Install Node.js
-
-Node.js is what the app runs on. You install it once and never touch it again.
-
-1. Go to **https://nodejs.org/** and click the big green **LTS** button (version 20 or newer).
-2. Run the installer — accept all defaults.
-3. To check it worked: open a terminal (**Command Prompt** on Windows, **Terminal** on Mac) and type:
-   ```
-   node --version
-   ```
-   You should see something like `v20.18.0`. If it says "command not found", restart your computer.
-
----
-
-## Step 3 — Install FFmpeg
-
-FFmpeg is the engine that assembles the final video.
-
-**Windows**
-1. Go to **https://www.gyan.dev/ffmpeg/builds/** and download **`ffmpeg-release-essentials.7z`** (or the `.zip`).
-2. Extract it to `C:\ffmpeg` so you end up with `C:\ffmpeg\bin\ffmpeg.exe`.
-3. Remember that path — you may paste it into Conveyer's settings later.
-
-**macOS**
-1. Install Homebrew from **https://brew.sh** if you don't have it.
-2. In Terminal, run: `brew install ffmpeg`
-
-**Linux**
-- Ubuntu/Debian: `sudo apt install ffmpeg`
-- Fedora: `sudo dnf install ffmpeg`
-
----
-
-## Step 4 — Install Conveyer
-
-Open the Conveyer folder and:
-
-- **Windows:** double-click **`install.bat`**
-- **macOS:** double-click **`install.command`** *(first time, right-click → Open → confirm, to get past Gatekeeper)*
-
-A window opens and installs everything (2–5 minutes). When it says **"Done!"** you're ready.
-
----
-
-## Step 5 — Get your API keys
-
-This is the part people worry about, but it's just four quick sign-ups.
-
-### 5a. Google Gemini — free (splits your script into scenes)
-1. Go to **https://aistudio.google.com/app/apikey**
-2. Sign in with any Google account → **Create API key**
-3. Copy the key (it starts with `AIza...`)
-
-### 5b. Pexels — free (the stock footage)
-1. Go to **https://www.pexels.com/api/**
-2. Sign up → **Get Started** → copy your key.
-3. **For long videos (200+ scenes):** make 3–5 free Pexels accounts (different emails) and collect all the keys. Conveyer rotates between them so you never hit the hourly limit. (One key is fine for short videos.)
-
-### 5c. ai33.pro — cheap (the voice)
-1. Go to **https://ai33.pro** → sign up.
-2. Buy a small credit pack (**$5 lasts a long time**).
-3. Copy the API key from your dashboard.
-
-> ai33.pro is a cheaper gateway to ElevenLabs voices — same quality, pay only for what you use.
-
-### 5d. Groq — free (makes the voice smooth)
-1. Go to **https://console.groq.com/keys** → sign up (free).
-2. **Create API Key** → copy it.
-
-> Groq listens to your finished narration and marks exactly where each scene's words are, so the voice flows naturally and sentences are never split between scenes. The free tier easily covers normal use.
-
----
-
-## Step 6 — Launch the app
-
-- **Windows:** double-click **`start.bat`**
-- **macOS:** double-click **`start.command`**
-
-A terminal window opens and your browser automatically goes to **http://localhost:3000**.
-
-> ⚠️ **Keep that terminal window open** while you use Conveyer. Closing it stops the app. (You can minimize it.)
-
----
-
-## Step 7 — First-time settings
-
-1. In the app, click **Settings** (left sidebar).
-2. Paste your four keys into the matching fields:
-   - `GOOGLE_API_KEY`
-   - `PEXELS_API_KEY` *(for multiple keys, paste one per line)*
-   - `AI33PRO_API_KEY`
-   - `GROQ_API_KEY`
-3. **Windows only:** if FFmpeg isn't on your system PATH, paste `C:\ffmpeg\bin\ffmpeg.exe` into `FFMPEG_PATH`.
-4. Under **Voice Over**, paste an **ElevenLabs voice ID** into `TTS_VOICE_ID` (see [Picking a voice](#picking-a-voice)). Leave **Voice mode** on **single-shot**.
-5. Click **Save all changes**.
-
-You only do this once — your settings are remembered.
-
----
-
-## Step 8 — Make your first video
-
-1. Click **New Run** in the sidebar.
-2. Give it a **title** and paste your **script** (500–1500 words is the sweet spot for an 8–15 min video; short scripts work too).
-3. Click **Run Pipeline**.
-4. Watch the live log. When you see the green **`Pipeline complete`**, your video is ready on the page — download the MP4 and upload to YouTube.
-
-> Want to test quickly? Paste ~70 words (≈30 seconds) of concrete, visual narration (e.g. about the ocean, a city, history) — Conveyer finds better footage when the wording is concrete.
-
----
-
-## Picking a voice
-
-A **voice ID** is the code at the end of a voice's page URL in the ElevenLabs voice library:
-**https://elevenlabs.io/app/voice-library**
-
-Some solid starting voices:
-
-| Voice ID | Voice | Good for |
+| Key | What it's for | Where to get it |
 |---|---|---|
-| `JBFqnCBsd6RMkjVDRZzb` | George — deep British male | documentary, mystery |
-| `21m00Tcm4TlvDq8ikWAM` | Rachel — calm American female | explainers, lifestyle |
-| `pNInz6obpgDQGcFmaJgB` | Adam — clear American narrator | news, top-10s |
-| `EXAVITQu4vr4xnSDxMaL` | Sarah — warm, soft female | wellness, calm topics |
+| **Google Gemini** | Reads your script & splits it into scenes; checks that footage matches | https://aistudio.google.com/app/apikey |
+| **Pexels** | The library of real video clips and photos | https://www.pexels.com/api/ |
+| **Groq** | Lines the voiceover up perfectly with the pictures | https://console.groq.com/keys |
+| **Voice (GenAIPro)** | The AI voice that reads your script | (your GenAIPro account — key + your Voice ID) |
 
-> Tip: try the same script with 2–3 voices to find your channel's signature sound.
-
----
-
-## How the voiceover works
-
-Conveyer uses **single-shot** voice mode by default. Instead of recording each scene separately (which made sentences sound chopped at scene changes), it records the **entire script in one continuous take**, then uses Groq to find the exact timing of every word and lines the visuals up to it.
-
-Result: smooth, natural narration with the footage changing in sync — no mid-sentence breaks.
-
-Two related controls in **Settings → Voice Over**:
-- **Voice speed** — `0.9` for a calmer pace (and slower scene changes). Pitch stays natural.
-- **Max seconds per b-roll clip** — for a long scene, Conveyer shows several different clips (this many seconds each) instead of stretching one. Default `7`.
-
-> **"Pause between scenes" does nothing in single-shot mode** — there are no scene-by-scene gaps to pad. It only applies if you switch Voice mode to *per-scene*.
+You don't need all of them to just open and look at the app — but you need them to actually **make a video**.
 
 ---
 
-## Aspect ratio (16:9 vs Shorts)
+## 2. Installing the app
 
-The output frame shape is set by **`VIDEO_RESOLUTION`** in Settings:
+You'll receive the app as a **folder** (or a ZIP you unzip into a folder). Put it somewhere easy to find, like your Desktop or Documents.
 
-| You want | Set `VIDEO_RESOLUTION` | Set `STOCK_FOOTAGE_ORIENTATION` |
-|---|---|---|
-| **Normal YouTube (16:9)** | `1920x1080` | `landscape` |
-| **Shorts / TikTok / Reels (9:16)** | `1080x1920` | `portrait` |
-| **Square (1:1)** | `1080x1080` | `square` |
+**On a Mac:**
+1. Open the app folder in Finder.
+2. Double-click **`install.command`**.
+3. A black window opens and installs everything (takes a few minutes the first time). When it says **"Done!"**, you can close it.
 
-Always set both to match. For normal videos, the defaults (`1920x1080` + `landscape`) are already correct — leave them.
+> If macOS says *"install.command can't be opened because it is from an unidentified developer"*: right-click the file → **Open** → **Open**. You only need to do this once.
+
+**On Windows:**
+1. Open the app folder.
+2. Double-click **`install.bat`**.
+3. A window opens and installs everything. When it says **"Done!"**, close it.
+
+That's the whole installation. You don't reinstall this every time — only once (and again when you update to a new version).
 
 ---
 
-## All settings explained
+## 3. Starting the app
 
-### Required API keys
-| Setting | What it does |
-|---|---|
-| `GOOGLE_API_KEY` | Gemini — splits your script into scenes. |
-| `PEXELS_API_KEY` | Pexels stock footage. Paste several keys (one per line) for long videos. |
-| `AI33PRO_API_KEY` | The ElevenLabs voiceover (via ai33.pro). |
-| `GROQ_API_KEY` | Free — powers the smooth single-shot voice timing. |
+Every time you want to use the app:
 
-### Voice Over
+- **Mac:** double-click **`start.command`** in the app folder.
+- **Windows:** double-click **`start.bat`**.
+
+A window opens and stays open (that's the app running — don't close it while you work). After a few seconds it will say something like *"ready on http://localhost:3000"*.
+
+Now open your web browser (Chrome, Safari, Edge…) and go to:
+
+### 👉 http://localhost:3000
+
+You'll see the Conveyer Ori screen. This is the app — it just runs inside your browser, on your own computer.
+
+---
+
+## 4. First-time setup — entering your keys
+
+1. In the app, click **Settings** (left side).
+2. Paste each of your keys into the matching box:
+   - **Google API key** (Gemini)
+   - **Pexels API key**
+   - **Groq API key**
+   - Under **Voice Over**, choose your voice engine and paste your **voice key** and **Voice ID**.
+3. (Optional) If FFmpeg isn't found automatically, paste the full path to it in **FFmpeg path**.
+4. Click **Save all changes** at the top.
+
+You only do this once. Your keys are stored privately on your own computer.
+
+> 🔒 Your keys never leave your machine except to talk directly to those services (Google, Pexels, etc.). Nothing is sent to us.
+
+---
+
+## 5. Making your first video
+
+1. Go to **Video Conveyer** (the main page).
+2. (Optional) Type a **Title** so you can find the video later.
+3. **Paste your full script** into the big box.
+4. Click **Run pipeline**.
+5. The page switches to a live progress view. You'll see each step happen: splitting the script, recording the voice, finding footage, assembling the video.
+6. When it's done, the finished **video appears right there** to preview, and the file is saved on your computer (see next section).
+
+A long (1-hour) video takes a while to build — that's normal. You can watch the progress log the whole time. You can also leave it running and come back.
+
+> The app does the **intro** (fast, video+photos) and the **body** (slow, photos) automatically, in one continuous voiceover. You don't have to split anything yourself.
+
+---
+
+## The Two-Zone settings
+
+In **Settings → "Two-Zone Timeline (Intro + Body)"** you control the look:
+
 | Setting | What it does | Default |
 |---|---|---|
-| `TTS_PROVIDER` | Which voice engine. `ai33pro` (default) or `69labs` — **both use the same ElevenLabs voices**, 69labs is just an alternate gateway. Switch to `69labs` if you have a 69labs key / prefer it. | ai33pro |
-| `LABS69_API_KEY` | Your 69labs key (starts with `vk_`). **Only needed if `TTS_PROVIDER = 69labs`.** Get it from your 69labs dashboard. | — |
-| `TTS_MODE` | `single-shot` (smooth, recommended, uses Groq) or `per-scene` (older, small pauses). | single-shot |
-| `TTS_VOICE_ID` | ElevenLabs voice ID (works for both providers). | — |
-| `TTS_MODEL` | `eleven_multilingual_v2` (best quality) or `eleven_turbo_v2_5` (faster/cheaper). | eleven_multilingual_v2 |
-| `TTS_SPEED` | Narration speed. `1.0` normal, `0.9` calmer. Pitch stays natural. | 1.0 |
-| `MAX_CLIP_SECONDS` | Max length of one b-roll clip in smooth mode; longer scenes get several clips. `0` = one clip per scene. | 7 |
+| **Intro length (seconds)** | How long the fast, engaging intro lasts. Everything after this point becomes the slow photo body. **Set it to `0`** to make the whole video slow photos. | `150` (2.5 min) |
+| **Intro: seconds per visual** | How often the picture changes during the intro. Lower = snappier. | `5` |
+| **Body: seconds per photo** | How often the photo changes during the slow body. | `15` |
+| **Intro photo / video mix (%)** | How much of the intro is photos vs. real video clips. `20` means mostly video with a few photos. `0` = all video. | `20` |
 
-> **Switching the voice engine:** the same `TTS_VOICE_ID` (an ElevenLabs voice) works on both `ai33pro` and `69labs`, so you can flip `TTS_PROVIDER` without changing your voice. Speed is handled correctly either way.
->
-> **Auto-fallback:** you don't strictly have to set both. If the selected engine has no key but the other one does, Conveyer automatically uses the one that's configured — so whichever key you paste (ai33pro **or** 69labs), the voiceover just works. If you set both keys, `TTS_PROVIDER` decides.
-
-### Stock footage (Pexels)
-| Setting | What it does | Default |
-|---|---|---|
-| `STOCK_FOOTAGE_ORIENTATION` | `landscape` / `portrait` / `square`. | landscape |
-| `STOCK_FOOTAGE_MAX_HEIGHT` | Caps clip resolution: `720` / `1080` / `2160`. | 1080 |
-| `STOCK_FOOTAGE_MIN_DURATION` | Skip clips shorter than this (seconds). | 4 |
-| `SCENE_PHOTO_RATIO` | % of scenes that use a still photo (with smooth zoom) vs a video. `0` = video only, `100` = photos only. | 40 |
-| `SCENE_MIX_MODE` | `random` or `alternating` — how photo scenes are spread out. | random |
-
-### Video & quality
-| Setting | What it does | Default |
-|---|---|---|
-| `VIDEO_RESOLUTION` | Output size & shape (see [Aspect ratio](#aspect-ratio-169-vs-shorts)). | 1920x1080 |
-| `VIDEO_FPS` | Frames per second. 24 cinematic / 30 standard / 60 (slower to render). | 30 |
-| `TRANSITION_MIN` / `TRANSITION_MAX` | Crossfade length range between scenes (seconds). `0`/`0` = hard cuts. | 0.3 / 0.7 |
-| `FFMPEG_PATH` | Full path to ffmpeg if it isn't on your system PATH (Windows). | — |
-| `RUNS_OUTPUT_DIR` | Where finished videos are saved. Empty = default folder. | — |
-
-### Performance & reliability
-| Setting | What it does | Default |
-|---|---|---|
-| `ANIMATION_CONCURRENCY` | Parallel Pexels downloads. Rate limits are auto-handled; raise to 8–10 with multiple Pexels keys. | 5 |
-| `ASSEMBLE_CONCURRENCY` | Parallel FFmpeg renders. Set to about half your CPU cores. | 4 |
-| `FAILURE_THRESHOLD_PERCENT` | If more than this % of scenes fail, the run stops. Raise to 60–70 on shaky internet. | 25 |
-
-### Google Drive backup (optional, advanced)
-Auto-uploads finished videos to your Google Drive. Off by default; needs a one-time Google Cloud OAuth setup (`GDRIVE_CLIENT_ID` / `GDRIVE_CLIENT_SECRET`, then connect in Settings, then tick `GDRIVE_SYNC_ENABLED`). Skip unless you specifically want cloud backups.
+Change a value, click **Save all changes**, and your next video uses the new settings.
 
 ---
 
-## Where your videos are saved
+## 6. Where your videos are saved
 
-By default, in your user folder (separate from the app, so updates never delete them):
-- **Windows:** `C:\Users\<you>\.conveyer-guilherme\runs\<run title>\`
-- **macOS/Linux:** `~/.conveyer-guilherme/runs/<run title>/`
+By default, finished videos and their pieces are saved in a hidden folder in your home directory:
 
-> On Mac this folder is hidden (it starts with a dot). In Finder press **Cmd + Shift + .** to show it.
+- **Mac:** `~/.conveyer-ori/runs/<your video title>/`
+- **Windows:** `C:\Users\<you>\.conveyer-ori\runs\<your video title>\`
 
-`final.mp4` is your finished video. You can change the location with `RUNS_OUTPUT_DIR` in Settings.
+The finished file is named **`final.mp4`** inside that folder.
 
----
+You can choose a different, easier folder: **Settings → Storage → Runs output folder** (e.g. your Desktop). Click Save, and new videos go there.
 
-## Troubleshooting
-
-**The voice sounds chopped / pauses mid-sentence**
-Make sure **Voice mode = single-shot** and your `GROQ_API_KEY` is set. (Per-scene mode has small pauses by design.)
-
-**A photo or video looks stretched/squished**
-Check `VIDEO_RESOLUTION` is `1920x1080` (for 16:9). Photos are now cropped to fit, never stretched.
-
-**Long video pauses for a while during footage download**
-Normal — that's the Pexels hourly limit; Conveyer auto-pauses and resumes. Add more Pexels keys (one per line) to go faster.
-
-**"ai33pro task error" / "Groq" error**
-Out of ai33.pro credits, or a wrong/missing key. Check Settings and your ai33.pro / Groq dashboards.
-
-**"FFmpeg not found"**
-Paste the full path to `ffmpeg.exe` into `FFMPEG_PATH` in Settings.
-
-**"Port 3000 already in use"**
-Run `stop.bat` / `stop.command`, then start again.
-
-> 🆘 **Hit an error not listed here?** Open the run page and click **⬇ Download full log**, then send that `.txt` file. The log shows exactly what went wrong.
+> Your settings and past videos live in that `.conveyer-ori` folder — **outside** the app folder. That means you can safely replace the app with a new version (see Updating) without losing anything.
 
 ---
 
-## Costs
+## 7. Check that everything works (no keys needed)
 
-Per ~10-minute video, roughly:
+Want to confirm the app can build video on your computer **before** spending any API credits? With the app running, open this address in your browser:
 
-| Service | Cost |
-|---|---|
-| Gemini (scene split) | free |
-| Pexels (footage) | free |
-| Groq (voice timing) | ~free (free tier) |
-| ai33.pro (voice) | ~$0.05–0.10 (`eleven_turbo_v2_5` ≈ half) |
+### 👉 http://localhost:3000/api/smoke
 
-**Total: about $0.05–0.20 per video. No monthly fees.**
+It quickly makes a tiny test video using made-up colours and a tone (no internet, no keys, no cost). If you see **`"ok": true`** with a file size and a duration, your computer's video engine (FFmpeg) is working perfectly. If you see an error, it usually means FFmpeg isn't installed or found — see Troubleshooting.
 
 ---
 
-## Updating
+## 8. Updating to a new version
 
-1. Stop the app (close the terminal window).
-2. Download the latest version (Download ZIP again, or `git pull`).
-3. Replace the old folder with the new one. **Your settings and past videos are safe** — they live in `~/.conveyer-guilherme/`, outside the app folder.
-4. Run `install` then `start` again. Everything comes back automatically.
+When you receive a new version:
+
+1. **Stop the app** if it's running (see next section).
+2. Replace the old app folder with the new one (or, if you use Git: open Terminal/Command Prompt in the folder and run `git pull`).
+3. Run the installer again (**`install.command`** on Mac / **`install.bat`** on Windows) — this updates the parts that changed.
+4. Start the app as usual.
+
+**Your settings, keys and past videos are safe** — they live in the `.conveyer-ori` folder, not in the app folder, so replacing the app never touches them.
 
 ---
 
-*Local-only tool. Pexels content is licensed for commercial use. Don't share your API keys publicly. Found a bug? Click **⬇ Download full log** on the run page and send the file.*
+## 9. Stopping the app
+
+- Close the black **start** window (or press **Ctrl + C** inside it).
+- Or double-click **`stop.command`** (Mac) / **`stop.bat`** (Windows).
+
+The browser tab can stay open — it just won't do anything until you start the app again.
+
+---
+
+## 10. Troubleshooting
+
+**"The page won't open / can't reach localhost"**
+The app isn't running. Double-click `start.command` (Mac) or `start.bat` (Windows) and wait for "ready", then refresh the browser.
+
+**"/api/smoke" shows an error, or a video fails with an FFmpeg message**
+FFmpeg isn't installed or the app can't find it. Install it (see step 1c), or paste its full path into **Settings → FFmpeg path** and Save.
+
+**A run stops with "GOOGLE_API_KEY is not set" (or PEXELS / GROQ)**
+That key is missing. Open **Settings**, paste the key, and **Save all changes**.
+
+**The voice doesn't work / wrong voice**
+Check **Settings → Voice Over**: the voice engine, the voice **key**, and the **Voice ID** must all be filled in. Make sure you typed the Voice ID exactly.
+
+**On-screen text isn't appearing**
+On-screen text is **off by default**. If you turned it on and it still doesn't show, your FFmpeg build is missing "libfreetype" — install a "full" FFmpeg build (see step 1c). The video still renders without text.
+
+**Footage looks a bit off-topic sometimes**
+Stock footage is never perfect. Add a short hint in **Settings → Video context** (e.g. "WWII-era firearms, historical photos") to keep results on-theme.
+
+**It's slow on a long video**
+That's expected — a 1-hour video has hundreds of pieces to fetch and assemble. Watch the live log; you can leave it running.
+
+**macOS won't open install.command ("unidentified developer")**
+Right-click the file → **Open** → **Open**. One time only.
+
+---
+
+## 11. Frequently asked questions
+
+**Does this upload my video to YouTube?**
+No. It creates the **`final.mp4`** file on your computer. You upload it to YouTube yourself.
+
+**Is my script or data sent to you?**
+No. Everything runs locally. Your keys only talk directly to the services they belong to (Google, Pexels, Groq, your voice provider).
+
+**Can I make a normal (not 1-hour) video?**
+Yes — paste any length of script. For a short video, set the **Intro length** small (or `0`).
+
+**Can I make an all-photos slideshow with no video clips?**
+Yes — set **Intro length (seconds)** to `0`. The whole video becomes slow photos with Ken-Burns.
+
+**Do I need to keep the black window open?**
+Yes, while you're using the app. It's the app itself running. Closing it stops the app.
+
+---
+
+*Conveyer Ori runs locally — Next.js + FFmpeg, no cloud, no account. Your machine, your data.*

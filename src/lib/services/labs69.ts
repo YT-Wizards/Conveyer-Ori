@@ -6,7 +6,7 @@ import { log, type LogLevel } from "../logger";
  * 69labs.vip API client — TTS ONLY, single key.
  *
  * The full 69labs platform also does images + videos and supports a multi-key
- * account pool, but Conveyer Guilherme only needs the TTS path: it uses 69labs
+ * account pool, but this app only needs the TTS path: it uses 69labs
  * purely as an alternate gateway to the SAME ElevenLabs voices that ai33.pro
  * serves. So this is the slimmed-down client — one `LABS69_API_KEY`, the three
  * TTS calls (create → poll → download), and the rate-limit handling intact.

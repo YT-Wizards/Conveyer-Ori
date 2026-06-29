@@ -247,8 +247,9 @@ export const DEFAULTS: Record<SettingKey, string> = {
   TRANSITION_MAX: "0.7",
   SCENE_TAIL_SILENCE: "0.4",
 
-  // Captions / step overlays
-  TEXT_OVERLAY_MODE: "hook",
+  // Captions / step overlays — OFF by default (Ori's channels want no captions;
+  // also avoids drawtext on ffmpeg builds without libfreetype). Set "hook"/"all" to enable.
+  TEXT_OVERLAY_MODE: "off",
   TEXT_OVERLAY_HOOK_SECONDS: "30",
   TEXT_OVERLAY_FONT: "",
   CAPTION_LEAD_IN_SEC: "0",

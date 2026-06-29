@@ -11,7 +11,7 @@ import type { Scene } from "./scene-split";
 /**
  * Pexels stock footage service — search + download.
  *
- * This is the b-roll source for Conveyer Guilherme. Replaces the AI video
+ * This is the b-roll source for the pipeline. Replaces the AI video
  * generation used in the other Conveyer forks (Grok / Veo / Kling).
  *
  * Free tier: 200 req/hour, 20 000/month. The API key is required.
