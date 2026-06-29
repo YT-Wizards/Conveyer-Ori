@@ -379,8 +379,8 @@ export const ALL_GROUPS: Group[] = [
       {
         key: "IMAGE_PROVIDER",
         label: "AI image provider",
-        desc: "Which service generates the AI photo. gemini uses your existing Google key — no extra setup (recommended). genaipro uses your GenAIPro account's image credits. kie uses kie.ai (Patrice's default — needs a separate kie.ai key). All produce the same Google nano-banana image family.",
-        examples: "gemini (default) · genaipro · kie",
+        desc: "Which service generates the AI photo. genaipro (default) uses your GenAIPro account's image credits — the same account as the voice. gemini uses your existing Google key (no extra key needed). kie uses kie.ai (Patrice's default — needs a separate kie.ai key). All produce the same Google nano-banana image family.",
+        examples: "genaipro (default) · gemini · kie",
       },
       {
         key: "IMAGE_MODEL",

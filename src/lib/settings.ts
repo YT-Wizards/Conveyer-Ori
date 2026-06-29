@@ -253,7 +253,7 @@ export const DEFAULTS: Record<SettingKey, string> = {
 
   // AI image fallback
   AI_FALLBACK_ENABLED: "on",
-  IMAGE_PROVIDER: "gemini",
+  IMAGE_PROVIDER: "genaipro",
   IMAGE_MODEL: "gemini-2.5-flash-image",
   GENAIPRO_API_KEY: "",
   GENAIPRO_IMAGE_MODEL: "nano_banana_pro",

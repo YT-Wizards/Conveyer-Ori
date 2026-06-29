@@ -150,9 +150,10 @@ clears the lowest vision tier does `tryAiPhotoFallback` kick in (wired into
 `stock-footage.ts` `acquireFootage`, **photos only**): generate an image →
 re-score with the SAME Gemini vision check → regenerate (different composition)
 until it clears `AI_MATCH_THRESHOLD` or `AI_REGEN_ATTEMPTS` run out → keep the
-best, and use it only if it scores ≥ the weak real match. Providers: **gemini**
-(default, `gemini-2.5-flash-image`, uses `GOOGLE_API_KEY`) or **genaipro**
-(`nano_banana_pro`). Falls back to real if no key / all gens fail.
+best, and use it only if it scores ≥ the weak real match. Providers (`IMAGE_PROVIDER`):
+**genaipro** (default, `nano_banana_pro`, `GENAIPRO_API_KEY`) · **gemini**
+(`gemini-2.5-flash-image`, `GOOGLE_API_KEY`) · **kie** (`google/nano-banana`, `KIE_API_KEY`).
+Falls back to real if no key / all gens fail.
 
 ---
 

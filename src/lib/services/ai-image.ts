@@ -167,7 +167,7 @@ async function kieImage(prompt: string, outFile: string): Promise<void> {
 }
 
 function imageProvider(): "gemini" | "genaipro" | "kie" {
-  const p = (getSetting("IMAGE_PROVIDER") || "gemini").trim().toLowerCase();
+  const p = (getSetting("IMAGE_PROVIDER") || "genaipro").trim().toLowerCase();
   return p === "genaipro" ? "genaipro" : p === "kie" ? "kie" : "gemini";
 }
 
