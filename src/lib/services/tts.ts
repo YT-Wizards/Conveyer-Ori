@@ -392,7 +392,7 @@ export async function synthesizeFullScript(
   // ElevenLabs-family engines (genaipro / ai33pro / 69labs / kokoro) accept
   // ~10k chars per request, so use BIG chunks → far fewer parts (a long script
   // goes from ~15 chunks to ~5). MiniMax has a tighter per-request limit.
-  const MAX_CHARS = provider === "minimax" || provider === "minimax-ai33pro" ? 4500 : 9000;
+  const MAX_CHARS = provider === "minimax" || provider === "minimax-ai33pro" ? 4500 : 6000;
   const chunks = chunkAtSentences(text, MAX_CHARS);
 
   if (chunks.length === 1) {
@@ -410,7 +410,7 @@ export async function synthesizeFullScript(
     const chunkPaths = chunks.map((_, i) =>
       outPath.replace(/\.mp3$/i, `__chunk${String(i).padStart(2, "0")}.mp3`)
     );
-    const limit = pLimit(Math.max(1, Number(getSetting("TTS_CONCURRENCY") || "3")));
+    const limit = pLimit(Math.min(chunks.length, 4)); // render parts mostly in parallel (cap 4 to respect GenAIPro rate limits)
     await Promise.all(
       chunks.map((chunk, i) =>
         limit(async () => {

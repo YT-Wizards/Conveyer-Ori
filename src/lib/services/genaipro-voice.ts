@@ -56,9 +56,10 @@ async function createTtsTask(body: string): Promise<string> {
 }
 
 async function pollTtsTask(taskId: string): Promise<string> {
-  const deadline = Date.now() + 15 * 60 * 1000;
+  const timeoutMin = Math.max(5, Number(getSetting("GENAIPRO_TTS_TIMEOUT_MIN") || "30"));
+  const deadline = Date.now() + timeoutMin * 60 * 1000;
   while (Date.now() < deadline) {
-    await sleep(4000);
+    await sleep(6000);
     const resp = await gapFetch(`/v1/labs/task/${encodeURIComponent(taskId)}`);
     if (resp.status === 429) { await sleep(10_000); continue; }
     if (!resp.ok) throw new Error(`GenAIPro TTS poll ${resp.status}: ${await errText(resp)}`);
@@ -73,7 +74,7 @@ async function pollTtsTask(taskId: string): Promise<string> {
     }
     // otherwise still processing / queued — keep polling until the deadline.
   }
-  throw new Error("GenAIPro TTS: task timed out after 15 min");
+  throw new Error(`GenAIPro TTS: task timed out after ${timeoutMin} min (raise GENAIPRO_TTS_TIMEOUT_MIN in Settings)`);
 }
 
 async function downloadToFile(url: string, outFile: string): Promise<void> {

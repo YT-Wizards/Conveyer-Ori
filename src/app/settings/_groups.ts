@@ -258,6 +258,7 @@ export const ALL_GROUPS: Group[] = [
       { key: "MIN_SCENE_SECONDS", label: "Min seconds per shot", desc: "Shortest time a visual stays on screen before scenes merge (single-shot).", examples: "3 default" },
       { key: "MAX_CLIP_SECONDS", label: "Max seconds per clip", desc: "Long segments split into clips up to this length (single-shot).", examples: "7 default" },
       { key: "MAX_PAUSE_SECONDS", label: "Max pause between sentences", desc: "Caps long silences in the continuous voiceover.", examples: "0.6 default" },
+      { key: "GENAIPRO_TTS_TIMEOUT_MIN", label: "GenAIPro: wait per part (min)", desc: "How long to wait for ONE GenAIPro voice part before giving up. GenAIPro can be slow on long scripts — raise this if parts time out.", examples: "30 default · 45 · 60", showIf: [{ key: "TTS_PROVIDER", in: ["genaipro"] }] },
     ],
   },
   {
