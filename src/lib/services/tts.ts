@@ -10,6 +10,7 @@ import { synthesizeMinimax } from "./minimax";
 import { genaiproTts } from "./genaipro-voice";
 import { createTtsJob, pollJob, downloadJob } from "./labs69";
 import { probeDurationSafe, applyAudioTempo, resolveFfmpegBinary } from "./video-assemble";
+import { pLimit } from "../plimit";
 
 export interface TtsResult {
   /** Path to the mp3 file. */
@@ -388,7 +389,10 @@ export async function synthesizeFullScript(
   // Chunk at sentence boundaries (. ! ? … and unicode variants), each chunk
   // ≤ MAX_CHARS. A single sentence longer than the cap is sent whole rather
   // than split mid-sentence.
-  const MAX_CHARS = 2500;
+  // ElevenLabs-family engines (genaipro / ai33pro / 69labs / kokoro) accept
+  // ~10k chars per request, so use BIG chunks → far fewer parts (a long script
+  // goes from ~15 chunks to ~5). MiniMax has a tighter per-request limit.
+  const MAX_CHARS = provider === "minimax" || provider === "minimax-ai33pro" ? 4500 : 9000;
   const chunks = chunkAtSentences(text, MAX_CHARS);
 
   if (chunks.length === 1) {
@@ -399,16 +403,23 @@ export async function synthesizeFullScript(
       stage: "tts",
     });
 
-    const chunkPaths: string[] = [];
-    for (let i = 0; i < chunks.length; i++) {
-      const chunkPath = outPath.replace(/\.mp3$/i, `__chunk${String(i).padStart(2, "0")}.mp3`);
-      log(runId, "info", `TTS chunk ${i + 1}/${chunks.length} (${chunks[i].length} chars)`, {
-        stage: "tts",
-      });
-      // Each chunk is dispatched → speed (TTS_SPEED) is applied here, per chunk.
-      await dispatchTts(runId, chunks[i], chunkPath, options);
-      chunkPaths.push(chunkPath);
-    }
+    // Synthesize chunks IN PARALLEL (order preserved by index). GenAIPro's async
+    // render is slow + variable per part (1–10 min each); doing them one-by-one
+    // made a long script take HOURS. Parallel ≈ the slowest single chunk, not the
+    // sum. Concurrency is bounded by TTS_CONCURRENCY so we don't hammer the API.
+    const chunkPaths = chunks.map((_, i) =>
+      outPath.replace(/\.mp3$/i, `__chunk${String(i).padStart(2, "0")}.mp3`)
+    );
+    const limit = pLimit(Math.max(1, Number(getSetting("TTS_CONCURRENCY") || "3")));
+    await Promise.all(
+      chunks.map((chunk, i) =>
+        limit(async () => {
+          log(runId, "info", `TTS chunk ${i + 1}/${chunks.length} (${chunk.length} chars)`, { stage: "tts" });
+          // dispatchTts applies TTS_SPEED per chunk.
+          await dispatchTts(runId, chunk, chunkPaths[i], options);
+        })
+      )
+    );
 
     // Concat the chunk mp3s into outPath with ffmpeg's concat demuxer (stream
     // copy — no re-encode, so it's instant and lossless).
