@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { getSetting } from "../settings";
 import { log } from "../logger";
+import { checkCancelled } from "../cancellation";
 
 /**
  * GenAIPro (Labs) text-to-speech — one continuous take of `text` → `outFile`.
@@ -55,14 +56,22 @@ async function createTtsTask(body: string): Promise<string> {
   throw new Error(lastErr);
 }
 
-async function pollTtsTask(taskId: string): Promise<string> {
-  const timeoutMin = Math.max(5, Number(getSetting("GENAIPRO_TTS_TIMEOUT_MIN") || "30"));
-  const deadline = Date.now() + timeoutMin * 60 * 1000;
+async function pollTtsTask(taskId: string, runId: string): Promise<string> {
+  // By DEFAULT (GENAIPRO_TTS_TIMEOUT_MIN = 0) we keep waiting until GenAIPro
+  // RESOLVES the task — either "completed" (download the audio) or "failed"
+  // (surface the error). The credit is already spent the moment the task is
+  // created, so giving up on a still-processing task just throws away a result
+  // we already paid for. Set a positive number only if you want a hard cap.
+  // The user can always Cancel the run, which breaks out via checkCancelled().
+  const capMin = Math.max(0, Number(getSetting("GENAIPRO_TTS_TIMEOUT_MIN") || "0"));
+  const deadline = capMin > 0 ? Date.now() + capMin * 60 * 1000 : Infinity;
   while (Date.now() < deadline) {
+    checkCancelled(runId); // lets the user stop a stuck task from the run page
     await sleep(6000);
     const resp = await gapFetch(`/v1/labs/task/${encodeURIComponent(taskId)}`);
     if (resp.status === 429) { await sleep(10_000); continue; }
-    if (!resp.ok) throw new Error(`GenAIPro TTS poll ${resp.status}: ${await errText(resp)}`);
+    // Transient network/5xx — keep waiting rather than killing a paid task.
+    if (!resp.ok) { await sleep(8000); continue; }
     const task = (await resp.json()) as LabsTask;
     const status = (task.status || "").toLowerCase();
     if (status === "completed") {
@@ -72,9 +81,9 @@ async function pollTtsTask(taskId: string): Promise<string> {
     if (status === "failed" || status === "error") {
       throw new Error(`GenAIPro TTS failed: ${task.error || "unknown error"}`);
     }
-    // otherwise still processing / queued — keep polling until the deadline.
+    // still processing / queued — keep waiting (GenAIPro holds the task server-side).
   }
-  throw new Error(`GenAIPro TTS: task timed out after ${timeoutMin} min (raise GENAIPRO_TTS_TIMEOUT_MIN in Settings)`);
+  throw new Error(`GenAIPro TTS: task exceeded the ${capMin}-min cap (set GENAIPRO_TTS_TIMEOUT_MIN=0 in Settings to wait until it finishes)`);
 }
 
 async function downloadToFile(url: string, outFile: string): Promise<void> {
@@ -104,6 +113,6 @@ export async function genaiproTts(runId: string, text: string, outFile: string):
 
   const taskId = await createTtsTask(body);
   log(runId, "debug", `GenAIPro TTS task ${taskId.slice(0, 8)}… (voice ${voiceId}, ${model})`, { stage: "tts" });
-  const url = await pollTtsTask(taskId);
+  const url = await pollTtsTask(taskId, runId);
   await downloadToFile(url, outFile);
 }

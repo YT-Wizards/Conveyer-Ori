@@ -69,7 +69,7 @@ export const SETTING_KEYS = [
   "GENAIPRO_API_KEY",          // GenAIPro key — AI images (genaipro provider) AND the GenAIPro voice (one key)
   "GENAIPRO_IMAGE_MODEL",      // nano_banana_pro | nano_banana_2 | imagen_4
   "GENAIPRO_TTS_MODEL",        // GenAIPro voice model, e.g. eleven_multilingual_v2
-  "GENAIPRO_TTS_TIMEOUT_MIN",  // how long to wait for ONE GenAIPro voice part (minutes); raise if parts time out
+  "GENAIPRO_TTS_TIMEOUT_MIN",  // minutes to wait for ONE GenAIPro voice part; 0 = wait until it finishes (default)
   "KIE_API_KEY",               // kie.ai key — AI images when IMAGE_PROVIDER=kie (Patrice's default provider)
   "KIE_IMAGE_MODEL",           // kie.ai image model, e.g. google/nano-banana
   "AI_MATCH_THRESHOLD",        // 0-100: a generated image must score this on the relevance check or it is regenerated
@@ -242,7 +242,7 @@ export const DEFAULTS: Record<SettingKey, string> = {
   GENAIPRO_API_KEY: "",
   GENAIPRO_IMAGE_MODEL: "nano_banana_pro",
   GENAIPRO_TTS_MODEL: "eleven_multilingual_v2",
-  GENAIPRO_TTS_TIMEOUT_MIN: "30",
+  GENAIPRO_TTS_TIMEOUT_MIN: "0",
   KIE_API_KEY: "",
   KIE_IMAGE_MODEL: "google/nano-banana",
   AI_MATCH_THRESHOLD: "80",
