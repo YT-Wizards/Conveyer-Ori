@@ -45,6 +45,7 @@ export const SETTING_KEYS = [
   "OPENVERSE_TOKEN",           // optional Openverse bearer token (raises rate limits). Empty works (anonymous).
   "FOOTAGE_AI_PICK",           // on | off — Gemini Vision scores candidate thumbnails
   "FOOTAGE_QC_ENABLED",        // on | off — per-frame QC on downloaded video clips (reject people/faces + burned-in captions)
+  "IMAGE_MATCH_MIN",           // photos below this vision score (0..1) prefer an on-topic AI image over the weak real photo (VIP image bar ≈ 0.8)
   "GEMINI_VISION_MODEL",       // Gemini model used for vision/preview image scoring
   "PRODUCTION_MODE",           // quality | balanced (default) | batch
   "FOOTAGE_SEARCH_ATTEMPTS",   // default: 3
@@ -222,6 +223,7 @@ export const DEFAULTS: Record<SettingKey, string> = {
   OPENVERSE_TOKEN: "",
   FOOTAGE_AI_PICK: "on",
   FOOTAGE_QC_ENABLED: "on",
+  IMAGE_MATCH_MIN: "0.8",
   GEMINI_VISION_MODEL: "gemini-2.5-flash",
   PRODUCTION_MODE: "balanced",
   FOOTAGE_SEARCH_ATTEMPTS: "3",

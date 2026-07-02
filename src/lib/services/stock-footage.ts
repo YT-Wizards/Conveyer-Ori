@@ -183,7 +183,7 @@ const insertVisionCacheStmt = db.prepare("INSERT OR REPLACE INTO vision_cache (k
 
 /** Bump this whenever the vision PROMPT changes so stale cached scores (judged
  *  under the old rules) are invalidated instead of masking the new behavior. */
-const VISION_PROMPT_VERSION = "3";
+const VISION_PROMPT_VERSION = "4";
 
 // ── Cache Helper Functions ───────────────────────────────────────────────────
 
@@ -1454,7 +1454,8 @@ async function aiScoreHitsByVision(
   runId: string,
   sceneText: string,
   videoContext: string,
-  hits: FootageHit[]
+  hits: FootageHit[],
+  wantedVisual = ""
 ): Promise<Map<string, number> | null> {
   if ((getSetting("FOOTAGE_AI_PICK") || "on").trim().toLowerCase() === "off") return null;
   const apiKey = getSetting("GOOGLE_API_KEY").trim();
@@ -1465,7 +1466,7 @@ async function aiScoreHitsByVision(
   }
 
   const model = getSetting("GEMINI_VISION_MODEL") || "gemini-2.5-flash";
-  const visualIntentRepr = `intent:${sceneText} context:${videoContext}`;
+  const visualIntentRepr = `intent:${sceneText} want:${wantedVisual} context:${videoContext}`;
   const intentHash = getShortHash(visualIntentRepr);
 
   const scoresMap = new Map<string, number>();
@@ -1526,8 +1527,9 @@ async function aiScoreHitsByVision(
         text:
           `You are choosing the single best B-roll for ONE moment of a documentary video.\n` +
           (videoContext ? `OVERALL VIDEO TOPIC: "${videoContext.slice(0, 300)}".\n` : "") +
-          `THIS MOMENT (narration): "${sceneText.slice(0, 300)}".\n\n` +
-          `${usable.length} candidates follow, each labelled "index N" with its preview image. LOOK AT EACH IMAGE and score 0-100 how well what is ACTUALLY SHOWN fits this moment AND the overall topic. Judge only by visible content, never by any text.\n` +
+          `THIS MOMENT (narration): "${sceneText.slice(0, 300)}".\n` +
+          (wantedVisual ? `WANTED VISUAL (the specific shot we searched for — the concrete on-topic subject): "${wantedVisual.slice(0, 140)}".\n` : "") +
+          `\n${usable.length} candidates follow, each labelled "index N" with its preview image. LOOK AT EACH IMAGE and score 0-100 how well what is ACTUALLY SHOWN fits this moment AND the overall topic (and the WANTED VISUAL when given). Judge only by visible content, never by any text.\n` +
           `Apply these criteria in order: (1) semantic relevance to this moment AND the topic [PRIMARY]; (2) prefer cinematic documentary shots — wide, establishing, aerial, clean composition; (3) penalize static single-subject snapshots, amateur quality, cluttered or low-resolution framing.\n` +
           `FACELESS RULE (IMPORTANT): this is a faceless channel — a shot whose MAIN subject is an identifiable PERSON or FACE (a stock stranger standing in for someone in the story) is WRONG and looks off-topic; score it 25 or below. Strongly prefer objects, places, landscapes, architecture, close-up details, archival imagery, hands-only or silhouettes. A distant crowd, a pair of working hands, or a blurred/back-view figure is fine IF on-topic.\n` +
           `DOMAIN RULE: an image that merely LOOKS similar but belongs to a DIFFERENT real-world domain, ERA or region than the topic is WRONG — score it 20 or below (e.g. for a video about ANTIQUE firearms, a modern handgun or an unrelated workshop product is off-topic even if it is "a gun"). BUT do NOT penalize footage merely for lacking the EXACT brand, model, label or precise year — stock libraries rarely have those, and generic SAME-CATEGORY footage is valid supporting B-roll.\n` +
@@ -1926,7 +1928,7 @@ async function acquireFootage(
     const visLimit = Math.max(1, Number(getSetting("VISION_CANDIDATE_LIMIT") || "12"));
     const toScore = pickForVision(scorable, visLimit).map((x) => x.hit);
 
-    const vision = await aiScoreHitsByVision(runId, scene.text, videoContext, toScore);
+    const vision = await aiScoreHitsByVision(runId, scene.text, videoContext, toScore, baseQueries[0] || "");
     for (const x of localScored) {
       const v = vision?.get(x.hit.dedupeId);
       pool.push({
@@ -1952,6 +1954,17 @@ async function acquireFootage(
   // No ≥80% match after maxAttempts attempts — descend the bar over everything found.
   if (pool.length > 0) {
     pool.sort((a, b) => b.score - a.score);
+    // Photos: a real photo below the image bar (VIP uses ~0.80) is usually only
+    // "loosely related" — the "western landscape plains → desert plant" miss. Try a
+    // re-scored AI image (regenerated until on-topic) FIRST; tryAiPhotoFallback keeps
+    // it only if it beats the best real score, so a decent real photo is never
+    // replaced by a worse AI one. Videos keep the full cascade (no AI video).
+    const imageBar = Math.max(0, Math.min(1, Number(getSetting("IMAGE_MATCH_MIN") || "0.8")));
+    if (kind === "photo" && (pool[0]?.score ?? 0) < imageBar) {
+      log(runId, "info", `Scene #${scene.index}: best real photo ${((pool[0]?.score ?? 0) * 100).toFixed(0)}% < ${(imageBar * 100).toFixed(0)}% image bar — trying an on-topic AI image first`, { stage: "animate" });
+      const ai = await tryAiPhotoFallback(runId, scene, videoContext, outPath, pool[0]?.score ?? 0);
+      if (ai) return ai;
+    }
     for (const tier of VISION_TIERS) {
       const atTier = pool.filter((p) => p.score >= tier);
       if (atTier.length === 0) continue;

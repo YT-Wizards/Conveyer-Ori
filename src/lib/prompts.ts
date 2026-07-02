@@ -24,7 +24,7 @@ For EACH scene, return a JSON object with:
     • Describe the MAIN visual of the WHOLE thought, judged from context — NOT a literal match of every word.
     • **CARRY THE SETTING.** Keep the current location/place in the query when the sentence itself doesn't name one. Example: if the story is set in a pharmacy and the line is "you put the bottle in your basket", search "pharmacy shopping basket" / "drugstore shelf products" — NOT a bare "bottle" or a random "bathroom basket". The setting only changes when the script clearly moves somewhere else.
     • **IGNORE incidental or out-of-place words.** For "you grab your rusty wrench from the garage, candy" → "rusty wrench garage", "tools workbench" — NEVER "candy".
-    • For an abstract/transitional line with no concrete image (a promise, a statistic, a rhetorical line), reuse the subject/location of the surrounding scenes so the footage stays on-topic.
+    • **KEEP THE MAIN SUBJECT in abstract lines.** For an abstract / transitional / rhetorical line with no concrete image, do NOT drift to a bare setting — carry the video's MAIN SUBJECT (the specific weapon, instrument, object) into the query. Example: in a video about a Colt revolver, "a silent record of the hands that once carried them" → "antique revolver on display" / "vintage revolver museum case", NOT a bare "western landscape". The setting is only a backdrop; the subject is the point.
     • Give 2–3 genuinely DIFFERENT angles (not the same words reworded) so if the first finds nothing, the next still fits — e.g. ["pharmacy shopping basket", "hand picking medicine shelf", "drugstore aisle"].
     • Use plain concrete nouns that exist as stock footage ("rusty tools workbench", "city street night", "ocean waves rocks"). NO abstract words ("concept", "idea", "tradition", "natural"), NO brand names, NO specific real people.
     • NEVER use negation words (no, not, without, never, none). Stock search has no concept of negation — "spinning without power" matches power turbines (the OPPOSITE subject). Describe only what is VISIBLE; drop the absence ("turbine ventilator spinning without power" → "turbine ventilator spinning on roof").
@@ -39,7 +39,7 @@ Return a STRICTLY valid JSON array — no markdown, no explanations.`,
  * re-seeds existing installs to the new default once (there is no prompt-edit UI,
  * so the stored row is always our seeded default — safe to overwrite).
  */
-const SCENE_SPLIT_VERSION = "6";
+const SCENE_SPLIT_VERSION = "7";
 
 const getStmt = db.prepare("SELECT content FROM prompts WHERE name = ?");
 const upsertStmt = db.prepare(
