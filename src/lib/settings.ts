@@ -60,6 +60,7 @@ export const SETTING_KEYS = [
 
   // ── Two-zone timeline (intro vs body) ─────────────────────────────
   "INTRO_SECONDS",             // length of the engaging intro zone (seconds); 0 = no intro (whole video = body)
+  "INTRO_MAX_FRACTION",        // safety cap: intro is never more than this fraction of the whole video (so short test videos still get a body zone)
   "INTRO_CLIP_SECONDS",        // intro: how often the visual changes (fast, default 5s)
   "BODY_CLIP_SECONDS",         // body: how often the photo changes (slow, default 15s)
   "INTRO_PHOTO_RATIO",         // intro: % of visuals that are photos (rest = video); the body is always photo
@@ -235,6 +236,7 @@ export const DEFAULTS: Record<SettingKey, string> = {
 
   // Two-zone timeline (intro vs body)
   INTRO_SECONDS: "150",
+  INTRO_MAX_FRACTION: "50",
   INTRO_CLIP_SECONDS: "5",
   BODY_CLIP_SECONDS: "15",
   INTRO_PHOTO_RATIO: "20",

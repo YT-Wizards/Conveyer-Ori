@@ -242,6 +242,12 @@ export const ALL_GROUPS: Group[] = [
         desc: "How long the fast, engaging intro lasts. Everything after is the slow photo body. Set 0 for no intro (whole video = slow photos).",
         examples: "150 = 2.5 min (default) · 120 · 180 · 0 = off",
       },
+      {
+        key: "INTRO_MAX_FRACTION",
+        label: "Intro cap on short videos (%)",
+        desc: "Safety limit so the intro never covers the whole video. On a short test video the intro shrinks to this share of it, so you always still see the slow photo body. Real long videos are unaffected (2.5 min is well under half an hour).",
+        examples: "50 = at most half (default) · 40 · 60",
+      },
       { key: "INTRO_CLIP_SECONDS", label: "Intro: seconds per visual", desc: "How often the picture changes during the intro.", examples: "5 default" },
       { key: "BODY_CLIP_SECONDS", label: "Body: seconds per photo", desc: "How often the photo changes during the slow body.", examples: "15 default" },
       {

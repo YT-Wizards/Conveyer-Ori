@@ -277,8 +277,19 @@ async function runSingleShot(
 
   // 2. Two-zone timeline: an engaging INTRO (real video + a few photos, fast
   //    pacing) then a slow PHOTO-ONLY body with Ken-Burns zoom. A segment is
-  //    "intro" when its aligned start is before INTRO_SECONDS (0 = no intro).
-  const introMs = Math.max(0, Number(getSetting("INTRO_SECONDS") || "150")) * 1000;
+  //    "intro" when its aligned start is before the intro boundary (0 = no intro).
+  const introSecondsRaw = Math.max(0, Number(getSetting("INTRO_SECONDS") || "150"));
+  const totalMs = Math.max(1, Math.round(globalAudio.durationSec * 1000));
+  // Safety cap — the intro must never swallow the WHOLE video. On a short test
+  // (e.g. a 90-second script) a fixed 150s intro would cover everything, so the
+  // body zone never appears and it looks like "the two zones don't work". Capping
+  // the intro at a fraction of the REAL duration guarantees a body zone at any
+  // length, while a real long video keeps the full fixed intro (the cap doesn't
+  // bind: 150s < 50% of an hour). INTRO_MAX_FRACTION is a percent (50 = half).
+  const introFrac = Math.max(0, Math.min(100, Number(getSetting("INTRO_MAX_FRACTION") || "50"))) / 100;
+  const fracCapMs = Math.floor(totalMs * introFrac);
+  const introMs = introSecondsRaw > 0 ? Math.min(introSecondsRaw * 1000, fracCapMs) : 0;
+  const introWasCapped = introSecondsRaw > 0 && introSecondsRaw * 1000 > introMs;
   const introClipSec = Math.max(0, Number(getSetting("INTRO_CLIP_SECONDS") || "5"));
   const bodyClipSec = Math.max(0, Number(getSetting("BODY_CLIP_SECONDS") || "15"));
   const mixMode = (getSetting("SCENE_MIX_MODE") || "random") as "random" | "alternating";
@@ -353,13 +364,30 @@ async function runSingleShot(
 
   const splitScenes = new Set(plans.filter((p) => p.fileStem.includes("_sub_")).map((p) => p.scene.index)).size;
   const photoPlans = plans.filter((p) => p.mode === "photo").length;
+  // Explicit, human-readable zone boundary so it's obvious in the log WHERE the
+  // intro ends and the body begins (and whether the short-video cap kicked in).
+  if (introMs <= 0) {
+    log(runId, "info", `Two-zone: intro OFF — whole video is body (${fmtMmSs(totalMs)}, photo-only Ken-Burns, ~${bodyClipSec}s each)`, { stage: "pipeline" });
+  } else {
+    log(
+      runId,
+      "info",
+      `Two-zone boundary at ${fmtMmSs(introMs)} of ${fmtMmSs(totalMs)} · ` +
+        `INTRO 0:00–${fmtMmSs(introMs)} (video+photo, ~${introClipSec}s each) · ` +
+        `BODY ${fmtMmSs(introMs)}–${fmtMmSs(totalMs)} (photo-only Ken-Burns, ~${bodyClipSec}s each)` +
+        (introWasCapped
+          ? ` · NOTE: this video is short, so the intro was capped to ${Math.round(introFrac * 100)}% of it (your INTRO_SECONDS=${introSecondsRaw}s would otherwise cover the whole video)`
+          : ""),
+      { stage: "pipeline" }
+    );
+  }
   log(
     runId,
     "info",
     `${scenes.length} scenes → ${segments.length} segments → ${plans.length} clip(s)` +
       (mergedAway > 0 ? ` · ${mergedAway} short scene(s) merged` : "") +
       (splitScenes > 0 ? ` · ${splitScenes} long segment(s) split` : "") +
-      ` · zones: ${introSegs} intro (~${introClipSec}s, video+photo) / ${bodySegs} body (~${bodyClipSec}s, photo-only)` +
+      ` · zones: ${introSegs} intro / ${bodySegs} body` +
       ` · ${photoPlans} photo / ${plans.length - photoPlans} video clip(s)`,
     { stage: "pipeline" }
   );
@@ -478,7 +506,15 @@ async function runSingleShot(
   }
 }
 
-const ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", 
+/** Format milliseconds as m:ss (e.g. 150000 → "2:30") for human-readable logs. */
+function fmtMmSs(ms: number): string {
+  const totalSec = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+const ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
               "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
 const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
 
