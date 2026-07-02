@@ -44,6 +44,7 @@ export const SETTING_KEYS = [
   "FOOTAGE_SOURCES",           // comma list: pexels,pixabay (video+photo) · openverse,wikimedia (CC images) · archive (CC video, opt-in). Default "pexels,pixabay,openverse,wikimedia".
   "OPENVERSE_TOKEN",           // optional Openverse bearer token (raises rate limits). Empty works (anonymous).
   "FOOTAGE_AI_PICK",           // on | off — Gemini Vision scores candidate thumbnails
+  "FOOTAGE_QC_ENABLED",        // on | off — per-frame QC on downloaded video clips (reject people/faces + burned-in captions)
   "GEMINI_VISION_MODEL",       // Gemini model used for vision/preview image scoring
   "PRODUCTION_MODE",           // quality | balanced (default) | batch
   "FOOTAGE_SEARCH_ATTEMPTS",   // default: 3
@@ -220,6 +221,7 @@ export const DEFAULTS: Record<SettingKey, string> = {
   FOOTAGE_SOURCES: "pexels,pixabay,openverse,wikimedia",
   OPENVERSE_TOKEN: "",
   FOOTAGE_AI_PICK: "on",
+  FOOTAGE_QC_ENABLED: "on",
   GEMINI_VISION_MODEL: "gemini-2.5-flash",
   PRODUCTION_MODE: "balanced",
   FOOTAGE_SEARCH_ATTEMPTS: "3",

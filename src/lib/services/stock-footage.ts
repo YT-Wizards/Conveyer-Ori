@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { spawnSync } from "node:child_process";
 import db, { DATA_DIR } from "../db";
 import { pLimit } from "../plimit";
@@ -1685,6 +1686,112 @@ function movingFrameCount(clipPath: string): number | null {
   }
 }
 
+/** ffprobe the clip's duration (seconds) synchronously; null if it can't. */
+function probeDurationSync(clipPath: string): number | null {
+  try {
+    const probe = ffmpegBin().replace(/ffmpeg(\.exe)?$/i, "ffprobe$1");
+    const r = spawnSync(
+      probe,
+      ["-v", "error", "-show_entries", "format=duration", "-of", "default=nk=1:nw=1", clipPath],
+      { encoding: "utf8", timeout: 15000 }
+    );
+    const d = parseFloat((r.stdout || "").trim());
+    return Number.isFinite(d) && d > 0 ? d : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Grab up to `count` JPEG frames spread across a clip, base64-encoded. Best-effort. */
+function extractClipFrames(clipPath: string, count = 3): { data: string; mime: string }[] {
+  const dur = probeDurationSync(clipPath) ?? 8;
+  const fracs = [0.2, 0.5, 0.8].slice(0, count);
+  const out: { data: string; mime: string }[] = [];
+  for (const f of fracs) {
+    const t = Math.max(0, dur * f);
+    const tmp = path.join(os.tmpdir(), `ori_qc_${process.pid}_${Math.random().toString(36).slice(2)}.jpg`);
+    try {
+      const r = spawnSync(
+        ffmpegBin(),
+        ["-ss", t.toFixed(2), "-i", clipPath, "-frames:v", "1", "-vf", "scale=640:-2", "-q:v", "6", "-y", tmp],
+        { timeout: 20000 }
+      );
+      if (r.status === 0 && fs.existsSync(tmp)) {
+        const b = fs.readFileSync(tmp);
+        if (b.byteLength > 0) out.push({ data: b.toString("base64"), mime: "image/jpeg" });
+      }
+    } catch {
+      /* skip this frame */
+    }
+    try { fs.unlinkSync(tmp); } catch {}
+  }
+  return out;
+}
+
+/**
+ * FACELESS quality-check for a DOWNLOADED video clip (ported from Conveyer VIP's
+ * per-frame QC). A thumbnail can hide what the actual footage shows, so we look at
+ * real frames and REJECT a clip whose main subject is a person/face (this is a
+ * faceless channel — a stock stranger must never stand in for someone in the
+ * story) or that carries burned-in captions/titles that would land in the final
+ * video. Fail-OPEN on any error/missing key so a run is never blocked by QC.
+ */
+async function qcVideoClip(
+  runId: string,
+  clipPath: string,
+  sceneText: string,
+  videoContext: string
+): Promise<{ ok: boolean; reason?: string }> {
+  if ((getSetting("FOOTAGE_QC_ENABLED") || "on").trim().toLowerCase() !== "on") return { ok: true };
+  const apiKey = getSetting("GOOGLE_API_KEY").trim();
+  if (!apiKey || isVisionCooldown()) return { ok: true };
+  const frames = extractClipFrames(clipPath, 3);
+  if (frames.length === 0) return { ok: true };
+
+  const model = getSetting("GEMINI_VISION_MODEL") || "gemini-2.5-flash";
+  const prompt =
+    `You are quality-checking ${frames.length} frames from a REAL stock VIDEO clip for a FACELESS documentary channel — it NEVER shows a stock person standing in for anyone in the story.\n` +
+    `OVERALL TOPIC: "${(videoContext || sceneText).slice(0, 240)}". THIS MOMENT: "${sceneText.slice(0, 200)}".\n` +
+    `For EACH frame (labelled "index N") report {"i":N,"person":"yes|no","text":"none|minor|prominent"}:\n` +
+    `- "person" = "yes" if an identifiable PERSON or FACE is a MAIN subject of the frame — a close/medium shot of a person, a face, a portrait, or a presenter/talking-head. "no" if the frame is objects, places, landscapes, architecture, close-up details, hands-only, a silhouette, or a distant/back-view crowd.\n` +
+    `- "text" = "prominent" if the frame has readable burned-in text that would land in our final video (subtitles/captions, a large title or headline, a lower-third name banner, a big watermark); "minor" for only a small peripheral logo or timestamp; "none" if clean.\n` +
+    `Judge only what is VISIBLE. Return STRICTLY a JSON array covering all ${frames.length}. No markdown.`;
+  const parts: unknown[] = [{ text: prompt }];
+  frames.forEach((f, i) => {
+    parts.push({ text: `index ${i}` });
+    parts.push({ inlineData: { mimeType: f.mime, data: f.data } });
+  });
+
+  try {
+    const r = await tfetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts }],
+          generationConfig: { responseMimeType: "application/json", temperature: 0, maxOutputTokens: 700, thinkingConfig: { thinkingBudget: 0 } },
+        }),
+      }
+    );
+    if (!r.ok) return { ok: true };
+    const j = (await r.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+    const text = j.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+    const arr = JSON.parse(text.match(/\[[\s\S]*\]/)?.[0] ?? text) as { i: number; person?: string; text?: string }[];
+    if (!Array.isArray(arr) || arr.length === 0) return { ok: true };
+    if (arr.some((x) => (x.text || "").toLowerCase() === "prominent")) {
+      return { ok: false, reason: "burned-in captions/text on screen" };
+    }
+    const persons = arr.filter((x) => (x.person || "").toLowerCase() === "yes").length;
+    if (persons >= Math.ceil(arr.length / 2)) {
+      return { ok: false, reason: "a person/face is the main subject" };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: true }; // fail-open
+  }
+}
+
 async function acquireFootage(
   kind: "video" | "photo",
   scene: Scene,
@@ -1700,8 +1807,11 @@ async function acquireFootage(
   }
   const queryTokenLists = baseQueries.map(relevanceTokens);
   let lastErr: unknown;
+  // Clips that failed the faceless QC (person/face or burned-in captions) — so we
+  // never re-download + re-QC the same asset as the tier bar descends.
+  const qcRejected = new Set<string>();
 
-  const tryList = async (list: PoolHit[], ignoreAvoidList = false) => {
+  const tryList = async (list: PoolHit[], ignoreAvoidList = false, qc = false) => {
     if (list.length === 0) return null;
     const fresh = usedIds && usedIds.size > 0 ? list.filter((s) => !usedIds.has(s.hit.dedupeId)) : list;
     const ordered = fresh.length > 0 ? fresh : list;
@@ -1713,6 +1823,7 @@ async function acquireFootage(
         log(runId, "warn", `Skipping adjacent duplicate footage: ${s.hit.dedupeId}`, { stage: "animate" });
         continue;
       }
+      if (qc && qcRejected.has(s.hit.dedupeId)) continue; // already failed faceless QC this scene
 
       if (usedIds && !usedIds.has(s.hit.dedupeId)) usedIds.add(s.hit.dedupeId);
       try {
@@ -1725,6 +1836,19 @@ async function acquireFootage(
           if (moving !== null && moving < 2) {
             try { fs.unlinkSync(outPath); } catch {}
             throw new Error(`frozen/degenerate video (movingFrames=${moving})`);
+          }
+        }
+        // FACELESS QC (video only, normal passes): look at the real downloaded
+        // frames and reject a clip whose main subject is a person/face or that
+        // carries burned-in captions. Skipped on last-resort passes (qc=false) so a
+        // scene is never failed by QC alone.
+        if (kind === "video" && qc) {
+          const verdict = await qcVideoClip(runId, outPath, scene.text, videoContext);
+          if (!verdict.ok) {
+            qcRejected.add(s.hit.dedupeId);
+            try { fs.unlinkSync(outPath); } catch {}
+            log(runId, "info", `Faceless QC rejected ${s.hit.source}:${s.hit.dedupeId} — ${verdict.reason}; trying next`, { stage: "animate" });
+            throw new Error(`faceless QC: ${verdict.reason}`);
           }
         }
         const reusedTag = reusing ? " (reused — no fresh matches)" : "";
@@ -1816,7 +1940,7 @@ async function acquireFootage(
 
     // Found a strong (≥80%) match → take the best and stop searching.
     if (pool[0] && pool[0].score >= VISION_TIERS[0]) {
-      const got = await tryList(pool.filter((p) => p.score >= VISION_TIERS[0]));
+      const got = await tryList(pool.filter((p) => p.score >= VISION_TIERS[0]), false, true);
       if (got) return got;
     } else if (attempt < maxAttempts - 1) {
       log(runId, "debug", `Best so far ${((pool[0]?.score ?? 0) * 100).toFixed(0)}% < 80% — broadening`, {
@@ -1836,7 +1960,7 @@ async function acquireFootage(
           stage: "animate",
         });
       }
-      const got = await tryList(atTier);
+      const got = await tryList(atTier, false, true);
       if (got) return got;
     }
     // No real photo is relevant enough → try an AI-generated image (re-scored +
