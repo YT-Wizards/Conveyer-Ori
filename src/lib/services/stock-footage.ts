@@ -183,7 +183,7 @@ const insertVisionCacheStmt = db.prepare("INSERT OR REPLACE INTO vision_cache (k
 
 /** Bump this whenever the vision PROMPT changes so stale cached scores (judged
  *  under the old rules) are invalidated instead of masking the new behavior. */
-const VISION_PROMPT_VERSION = "4";
+const VISION_PROMPT_VERSION = "5";
 
 // ── Cache Helper Functions ───────────────────────────────────────────────────
 
@@ -1425,9 +1425,18 @@ async function fetchThumbInline(url: string): Promise<{ data: string; mime: stri
 /** Progressively broaden a query to widen the candidate net on later attempts. */
 function broadenQuery(query: string, level: number): string {
   if (level <= 0) return query;
-  const words = relevanceTokens(query);
-  const keep = level === 1 ? 4 : 2; // attempt 2 → top 4 words, attempt 3 → top 2
-  return (words.length ? words : query.split(/\s+/)).slice(0, keep).join(" ") || query;
+  const raw = query.trim().split(/\s+/).filter(Boolean);
+  // Keep the leading NAMED-ENTITY run (Capitalized words or tokens with digits —
+  // "Winchester 1873", "AK-47", "Colt Single Action Army") VERBATIM. relevanceTokens
+  // lowercases + drops <3-char tokens, so broadening used to gut the exact subject
+  // ("M1 Garand rifle" → "garand rifle", "AK-47" → gone). Broaden only the tail.
+  let headLen = 0;
+  while (headLen < raw.length && headLen < 4 && (/^[A-Z]/.test(raw[headLen]) || /\d/.test(raw[headLen]))) headLen++;
+  if (headLen === 0) headLen = Math.min(1, raw.length); // no entity → keep the first word
+  const head = raw.slice(0, headLen);
+  const tail = relevanceTokens(raw.slice(headLen).join(" "));
+  const keepTail = level === 1 ? 2 : 0; // attempt 2 → entity + 2 tail words, attempt 3 → entity only
+  return [...head, ...tail.slice(0, keepTail)].join(" ") || query;
 }
 
 /**
@@ -1533,6 +1542,7 @@ async function aiScoreHitsByVision(
           `Apply these criteria in order: (1) semantic relevance to this moment AND the topic [PRIMARY]; (2) prefer cinematic documentary shots — wide, establishing, aerial, clean composition; (3) penalize static single-subject snapshots, amateur quality, cluttered or low-resolution framing.\n` +
           `FACELESS RULE (IMPORTANT): this is a faceless channel — a shot whose MAIN subject is an identifiable PERSON or FACE (a stock stranger standing in for someone in the story) is WRONG and looks off-topic; score it 25 or below. Strongly prefer objects, places, landscapes, architecture, close-up details, archival imagery, hands-only or silhouettes. A distant crowd, a pair of working hands, or a blurred/back-view figure is fine IF on-topic.\n` +
           `DOMAIN RULE: an image that merely LOOKS similar but belongs to a DIFFERENT real-world domain, ERA or region than the topic is WRONG — score it 20 or below (e.g. for a video about ANTIQUE firearms, a modern handgun or an unrelated workshop product is off-topic even if it is "a gun"). BUT do NOT penalize footage merely for lacking the EXACT brand, model, label or precise year — stock libraries rarely have those, and generic SAME-CATEGORY footage is valid supporting B-roll.\n` +
+          `AUTHENTICITY RULE: this must look like a REAL photograph or real video. Score 39 or below if the image is an OBVIOUS 3D/CGI render, a video-game screenshot, a digital illustration/cartoon/clip-art, an AI-looking picture, or carries GIBBERISH / fake made-up text or fake brand labels — even if the subject is on-topic. (Genuine period engravings, diagrams, blueprints, or archival scans of the real subject are FINE — those are real historical artifacts, not fakes.)\n` +
           `SCORING BANDS: 100 = exactly the wanted subject, on-topic, well shot; 85-95 = correct domain AND highly usable; 75-84 = same subject CATEGORY (strong supporting B-roll); 40-74 = only loosely related; 0-39 = wrong domain/era/region, misleading, or low quality.\n` +
           `Return STRICTLY a JSON array [{"i":<N>,"score":<int>}] covering all ${usable.length}. No markdown.`,
       },
@@ -1799,7 +1809,7 @@ async function acquireFootage(
   scene: Scene,
   outPath: string,
   options: AcquireOptions
-): Promise<{ author: string | null; sourceUrl: string; source: string; dedupeId: string }> {
+): Promise<{ author: string | null; sourceUrl: string; source: string; dedupeId: string; kind?: "video" | "photo" }> {
   const { runId, orientation = "landscape", maxHeight = 1080, minDuration = 4, usedIds, avoidDedupeIds, videoContext = "", anchorWords } = options;
   const gatherOpts = { runId, orientation, maxHeight, minDuration };
 
@@ -1929,11 +1939,21 @@ async function acquireFootage(
     const toScore = pickForVision(scorable, visLimit).map((x) => x.hit);
 
     const vision = await aiScoreHitsByVision(runId, scene.text, videoContext, toScore, baseQueries[0] || "");
+    // When vision SUCCEEDED this attempt, a candidate that Gemini never looked at
+    // (only a raw keyword-overlap "text" score) must NOT be allowed to win against
+    // vision-verified footage — otherwise a wordy Wikimedia/Openverse title covering
+    // the query tokens scores 1.0 and gets used sight-unseen (the "text match 100%"
+    // bug). Cap those text-only scores below the top tiers so they only serve at the
+    // low tiers when nothing vision-verified is better. Full text scores stand only
+    // when vision is unavailable (no key / 429 cooldown) — the explicit fallback mode.
+    const visionOk = vision !== null && vision.size > 0;
+    const TEXT_CAP = 0.6;
     for (const x of localScored) {
       const v = vision?.get(x.hit.dedupeId);
+      const textScore = visionOk ? Math.min(x.local, TEXT_CAP) : x.local;
       pool.push({
         hit: x.hit,
-        score: v !== undefined ? v : x.local,
+        score: v !== undefined ? v : textScore,
         via: v !== undefined ? "vision" : "text",
         query,
       });
@@ -1964,6 +1984,16 @@ async function acquireFootage(
       log(runId, "info", `Scene #${scene.index}: best real photo ${((pool[0]?.score ?? 0) * 100).toFixed(0)}% < ${(imageBar * 100).toFixed(0)}% image bar — trying an on-topic AI image first`, { stage: "animate" });
       const ai = await tryAiPhotoFallback(runId, scene, videoContext, outPath, pool[0]?.score ?? 0);
       if (ai) return ai;
+    }
+    // Videos: Ori can't generate AI VIDEO, but a genuinely weak clip (below the video
+    // floor) is worse than a strong on-topic AI STILL with Ken-Burns. Try that before
+    // shipping a <VIDEO_MATCH_MIN clip. Returns kind:"photo" so assembly Ken-Burns it;
+    // tryAiPhotoFallback keeps the still only if it beats the weak video's score.
+    const videoBar = Math.max(0, Math.min(1, Number(getSetting("VIDEO_MATCH_MIN") || "0.55")));
+    if (kind === "video" && (pool[0]?.score ?? 0) < videoBar) {
+      log(runId, "info", `Scene #${scene.index}: best real video ${((pool[0]?.score ?? 0) * 100).toFixed(0)}% < ${(videoBar * 100).toFixed(0)}% video floor — trying an on-topic AI still instead`, { stage: "animate" });
+      const ai = await tryAiPhotoFallback(runId, scene, videoContext, outPath, pool[0]?.score ?? 0);
+      if (ai) return { ...ai, kind: "photo" };
     }
     for (const tier of VISION_TIERS) {
       const atTier = pool.filter((p) => p.score >= tier);
@@ -2050,7 +2080,7 @@ export async function acquireStockClipForScene(
   scene: Scene,
   outPath: string,
   options: AcquireOptions
-): Promise<{ author: string | null; sourceUrl: string; source: string; dedupeId: string }> {
+): Promise<{ author: string | null; sourceUrl: string; source: string; dedupeId: string; kind?: "video" | "photo" }> {
   return acquireFootage("video", scene, outPath, options);
 }
 
@@ -2083,7 +2113,7 @@ export async function acquireStockPhotoForScene(
   scene: Scene,
   outPath: string,
   options: AcquirePhotoOptions
-): Promise<{ author: string | null; sourceUrl: string; source: string; dedupeId: string }> {
+): Promise<{ author: string | null; sourceUrl: string; source: string; dedupeId: string; kind?: "video" | "photo" }> {
   return acquireFootage("photo", scene, outPath, options);
 }
 

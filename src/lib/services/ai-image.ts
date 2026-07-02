@@ -196,27 +196,31 @@ function buildAiPrompt(base: string, videoContext: string, variant: string): str
   const realism =
     "photorealistic, real-world, high quality, sharp focus, natural lighting, documentary photography. " +
     "NOT fantasy, NOT sci-fi, NOT surreal, NOT abstract, NOT illustration, NOT 3D render, no glowing magic, no neon";
+  // Faceless channel — the AI fallback must not reintroduce the stranger faces the
+  // real-footage path filters out. Show the object / place / detail only.
+  const faceless =
+    "no people, no person, no face, no portrait, no crowd — show ONLY the object, place, artifact, or close-up detail (hands only if truly unavoidable)";
   const topic = (videoContext || "").trim().slice(0, 160);
   const contextAnchor = topic ? `in a documentary about: ${topic}` : "";
   const style = getSetting("AI_IMAGE_STYLE").trim();
-  return [base, contextAnchor, style, realism, noText, variant].filter(Boolean).join(", ");
+  return [base, contextAnchor, style, realism, faceless, noText, variant].filter(Boolean).join(", ");
 }
 
 /** Vision-score a generated image 0..1 (photorealism + on-topic + no baked text).
  *  Returns 1 if scoring is unavailable so a generated image is never blocked. */
-async function scoreAiImage(sceneText: string, videoContext: string, imagePath: string): Promise<number> {
+async function scoreAiImage(sceneText: string, videoContext: string, imagePath: string, wantedVisual = ""): Promise<number> {
   const apiKey = getSetting("GOOGLE_API_KEY").trim();
   if (!apiKey) return 1;
   let bytes: Buffer;
   try { bytes = fs.readFileSync(imagePath); } catch { return 0; }
   const model = getSetting("GEMINI_VISION_MODEL") || "gemini-2.5-flash";
   const instr =
-    `You are quality-checking ONE AI-generated image for a documentary scene.\n` +
+    `You are quality-checking ONE AI-generated image for a FACELESS documentary scene.\n` +
     `OVERALL VIDEO TOPIC: "${(videoContext || sceneText).slice(0, 300)}"\n` +
     `THIS SCENE: "${sceneText.slice(0, 200)}"\n` +
-    `Score 0-100: does the IMAGE fit this scene AND the topic, look photorealistic and high quality, ` +
-    `and contain NO readable text/letters/captions/fake labels? Any baked-in text, gibberish words, ` +
-    `fantasy/abstract look, or off-topic subject must score LOW. Return STRICTLY JSON {"score":<int>}.`;
+    (wantedVisual ? `WANTED VISUAL (the specific on-topic subject): "${wantedVisual.slice(0, 140)}"\n` : "") +
+    `Score 0-100: does the IMAGE show the WANTED VISUAL / fit this scene AND the topic, look photorealistic and high quality, ` +
+    `and contain NO readable text/letters/captions/fake labels? Score LOW (below 40) if it is off-subject, an illustration / 3D-render / cartoon, has baked-in or gibberish text, OR shows a PERSON or FACE as a main subject (this is a faceless channel — objects, places, and details only). Return STRICTLY JSON {"score":<int>}.`;
   const body = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: instr }, { inlineData: { mimeType: "image/jpeg", data: bytes.toString("base64") } }] }],
     generationConfig: { responseMimeType: "application/json", temperature: 0, maxOutputTokens: 2000, thinkingConfig: { thinkingBudget: 0 } },
@@ -286,7 +290,7 @@ export async function tryAiPhotoFallback(
       log(runId, "warn", `Scene #${scene.index}: AI image gen failed (${(e as Error).message.slice(0, 120)})`, { stage: "animate" });
       continue;
     }
-    const score = await scoreAiImage(scene.text, videoContext, tmp);
+    const score = await scoreAiImage(scene.text, videoContext, tmp, base);
     if (!best || score > best.score) {
       if (best) { try { fs.unlinkSync(best.tmp); } catch { /* ignore */ } }
       best = { tmp, score };

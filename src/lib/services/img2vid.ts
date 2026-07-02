@@ -73,8 +73,12 @@ export async function animateScene(
     assetInfo = await pexelsClip(runId, scene, filePath, options.videoUsedIds, options.avoidDedupeIds, options.videoContext, options.anchorWords);
   }
 
-  log(runId, "success", `Asset ready: ${fileName}`, { stage: "animate" });
-  return { path: filePath, kind: mode, dedupeId: assetInfo?.dedupeId };
+  // A "video" scene can fall back to an AI STILL when no clip was relevant enough
+  // (acquireFootage returns kind:"photo") — honor that so assembly Ken-Burns it
+  // instead of trying to play a JPEG as a video.
+  const actualKind: AssetMode = assetInfo?.kind ?? mode;
+  log(runId, "success", `Asset ready: ${fileName}${actualKind !== mode ? ` (as ${actualKind})` : ""}`, { stage: "animate" });
+  return { path: filePath, kind: actualKind, dedupeId: assetInfo?.dedupeId };
 }
 
 // ── Pexels video pipeline ───────────────────────────────────────────────────
@@ -87,7 +91,7 @@ async function pexelsClip(
   avoidDedupeIds?: Set<string>,
   videoContext?: string,
   anchorWords?: string[]
-): Promise<{ author: string | null; sourceUrl: string; source: string; dedupeId?: string }> {
+): Promise<{ author: string | null; sourceUrl: string; source: string; dedupeId?: string; kind?: "video" | "photo" }> {
   const orientation = (getSetting("STOCK_FOOTAGE_ORIENTATION") || "landscape") as Orientation;
   const maxHeight = Math.max(360, Number(getSetting("STOCK_FOOTAGE_MAX_HEIGHT") || "1080"));
   const minDuration = Math.max(0, Number(getSetting("STOCK_FOOTAGE_MIN_DURATION") || "4"));
@@ -132,7 +136,7 @@ async function pexelsPhoto(
   avoidDedupeIds?: Set<string>,
   videoContext?: string,
   anchorWords?: string[]
-): Promise<{ author: string | null; sourceUrl: string; source: string; dedupeId?: string }> {
+): Promise<{ author: string | null; sourceUrl: string; source: string; dedupeId?: string; kind?: "video" | "photo" }> {
   const orientation = (getSetting("STOCK_FOOTAGE_ORIENTATION") || "landscape") as Orientation;
   const maxHeight = Math.max(360, Number(getSetting("STOCK_FOOTAGE_MAX_HEIGHT") || "1080"));
 
