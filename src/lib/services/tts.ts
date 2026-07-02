@@ -8,6 +8,7 @@ import { createTtsTask, pollTask, downloadTask, createMinimaxAi33proTask } from 
 import { createV3SpeechTask, pollV3Task, downloadV3Task } from "./ai33pro";
 import { synthesizeMinimax } from "./minimax";
 import { genaiproTts } from "./genaipro-voice";
+import { elevenLabsTts } from "./elevenlabs-voice";
 import { createTtsJob, pollJob, downloadJob } from "./labs69";
 import { probeDurationSafe, applyAudioTempo, resolveFfmpegBinary } from "./video-assemble";
 import { pLimit } from "../plimit";
@@ -45,12 +46,20 @@ type TtsOptions = Record<string, never>;
  * If both keys are set, TTS_PROVIDER is respected. Exported so the pipeline can
  * show the user which engine is live.
  */
-export function resolveTtsProvider(): "ai33pro" | "69labs" | "kokoro" | "minimax" | "minimax-ai33pro" | "genaipro" {
+export function resolveTtsProvider(): "ai33pro" | "69labs" | "kokoro" | "minimax" | "minimax-ai33pro" | "genaipro" | "elevenlabs" {
   const selected = (getSetting("TTS_PROVIDER") || "ai33pro").toLowerCase();
   const hasAi33 = getSetting("AI33PRO_API_KEY").trim().length > 0;
   const has69 = getSetting("LABS69_API_KEY").trim().length > 0;
   const hasMinimax = getSetting("MINIMAX_API_KEY").trim().length > 0;
   const hasGenaipro = getSetting("GENAIPRO_API_KEY").trim().length > 0;
+  const hasElevenlabs = getSetting("ELEVENLABS_API_KEY").trim().length > 0;
+  if (selected === "elevenlabs") {
+    if (hasElevenlabs) return "elevenlabs";
+    if (hasGenaipro) return "genaipro";
+    if (hasAi33) return "ai33pro";
+    if (has69) return "69labs";
+    return "elevenlabs"; // a clear "ELEVENLABS_API_KEY not set" error surfaces later
+  }
   if (selected === "genaipro") {
     if (hasGenaipro) return "genaipro";
     if (hasAi33) return "ai33pro";
@@ -92,7 +101,9 @@ async function dispatchTts(
   // without changing any words. (Pause MARKERS like Kokoro's `*` are untouched.)
   const text = rawText.replace(/\s+/g, " ").trim();
   const provider = resolveTtsProvider();
-  if (provider === "genaipro") {
+  if (provider === "elevenlabs") {
+    await elevenLabsTts(runId, text, outPath);
+  } else if (provider === "genaipro") {
     await genaiproTts(runId, text, outPath);
   } else if (provider === "69labs") {
     await labs69Tts(runId, text, outPath);

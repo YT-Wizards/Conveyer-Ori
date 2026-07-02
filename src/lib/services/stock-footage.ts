@@ -383,15 +383,19 @@ async function acquireKey(runId?: string): Promise<KeyState> {
     }
     const earliest = keys[earliestIdx];
     const waitMs = Math.max(0, (earliest.exhaustedUntilMs ?? now) - now) + 5000;
-    const cappedWait = Math.min(waitMs, 75 * 60 * 1000);
+    // Pause at most PEXELS_MAX_PAUSE_MIN (default 15) then RETRY — the Pexels
+    // window can reset sooner than its header estimate, so re-check often instead
+    // of sleeping the whole reset time in one go. If still limited, waits again.
+    const capMin = Math.max(1, Number(getSetting("PEXELS_MAX_PAUSE_MIN") || "15"));
+    const cappedWait = Math.min(waitMs, capMin * 60 * 1000);
 
     if (runId) {
-      const untilLabel = earliest.resetAt !== null ? ` until ${formatLocalTime(earliest.resetAt)}` : "";
+      const resetLabel = earliest.resetAt !== null ? ` (window resets ~${formatLocalTime(earliest.resetAt)})` : "";
       const minutes = Math.max(1, Math.ceil(cappedWait / 60000));
       log(
         runId,
         "warn",
-        `All ${keys.length} Pexels key${keys.length === 1 ? "" : "s"} rate-limited — pausing ~${minutes} min${untilLabel}, then auto-resume on key #${earliestIdx + 1}`,
+        `All ${keys.length} Pexels key${keys.length === 1 ? "" : "s"} rate-limited — retrying in ~${minutes} min${resetLabel} on key #${earliestIdx + 1}`,
         { stage: "animate" }
       );
     }

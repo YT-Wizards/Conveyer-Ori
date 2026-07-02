@@ -27,6 +27,7 @@ export const SETTING_KEYS = [
   // ── Text-to-Speech (ai33.pro / ElevenLabs / MiniMax) ──────────────
   "TTS_PROVIDER",            // ai33pro | 69labs | kokoro | minimax | minimax-ai33pro
   "LABS69_API_KEY",          // 69labs API key
+  "ELEVENLABS_API_KEY",      // ElevenLabs DIRECT key (your own account) — fast + stable voice
   "MINIMAX_API_KEY",         // MiniMax direct T2A API key
   "MINIMAX_GROUP_ID",        // MiniMax GroupId
   "MINIMAX_MODEL",           // MiniMax TTS model, e.g. speech-02-hd
@@ -49,6 +50,7 @@ export const SETTING_KEYS = [
   "VISION_CONCURRENCY",        // default: 2
   "VISION_CANDIDATE_LIMIT",    // default: 8
   "VISION_COOLDOWN_ON_429_SEC", // default: 120
+  "PEXELS_MAX_PAUSE_MIN",       // all Pexels keys rate-limited → wait at most this many min, then retry
   "STOCK_FOOTAGE_ORIENTATION", // landscape | portrait | square
   "STOCK_FOOTAGE_MAX_HEIGHT",  // 720 | 1080 | 2160
   "STOCK_FOOTAGE_MIN_DURATION", // seconds
@@ -198,8 +200,9 @@ export const DEFAULTS: Record<SettingKey, string> = {
   VIDEO_CONTEXT: "",
 
   // TTS
-  TTS_PROVIDER: "genaipro",
+  TTS_PROVIDER: "elevenlabs",
   LABS69_API_KEY: "",
+  ELEVENLABS_API_KEY: "",
   MINIMAX_API_KEY: "",
   MINIMAX_GROUP_ID: "",
   MINIMAX_MODEL: "speech-02-hd",
@@ -222,6 +225,7 @@ export const DEFAULTS: Record<SettingKey, string> = {
   VISION_CONCURRENCY: "2",
   VISION_CANDIDATE_LIMIT: "8",
   VISION_COOLDOWN_ON_429_SEC: "120",
+  PEXELS_MAX_PAUSE_MIN: "15",
   STOCK_FOOTAGE_ORIENTATION: "landscape",
   STOCK_FOOTAGE_MAX_HEIGHT: "1080",
   STOCK_FOOTAGE_MIN_DURATION: "4",
