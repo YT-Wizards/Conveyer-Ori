@@ -289,7 +289,10 @@ async function runSingleShot(
   const introFrac = Math.max(0, Math.min(100, Number(getSetting("INTRO_MAX_FRACTION") || "50"))) / 100;
   const fracCapMs = Math.floor(totalMs * introFrac);
   const introMs = introSecondsRaw > 0 ? Math.min(introSecondsRaw * 1000, fracCapMs) : 0;
-  const introWasCapped = introSecondsRaw > 0 && introSecondsRaw * 1000 > introMs;
+  // Only flag the cap when it MEANINGFULLY trims the intro (>3s). A sub-second
+  // trim from rounding — e.g. a 120s intro on a 240s video landing at 119.85s —
+  // isn't worth a warning and must NOT claim the intro "would cover the video".
+  const introWasCapped = introSecondsRaw > 0 && introSecondsRaw * 1000 - introMs > 3000;
   const introClipSec = Math.max(0, Number(getSetting("INTRO_CLIP_SECONDS") || "5"));
   const bodyClipSec = Math.max(0, Number(getSetting("BODY_CLIP_SECONDS") || "15"));
   const mixMode = (getSetting("SCENE_MIX_MODE") || "random") as "random" | "alternating";
@@ -300,18 +303,27 @@ async function runSingleShot(
   const rangeByScene = new Map<number, SceneAudioRange>();
   for (const r of globalAudio.ranges) rangeByScene.set(r.sceneIdx, r);
 
-  // 3. MERGE adjacent scenes into "segments" so each visual stays on screen at
-  //    least MIN_SCENE_SECONDS. This stops the picture flipping every 1-2s AND
-  //    absorbs stray micro-scenes (e.g. a lone "candy.") into a neighbour — the
-  //    segment keeps the FIRST scene's footage for the whole merged span, so a
-  //    one-word off-topic scene never gets its own literal clip.
+  // 3. MERGE adjacent scenes into "segments" so each visual holds for roughly its
+  //    ZONE's target time — an intro visual ~INTRO_CLIP_SECONDS, a body photo
+  //    ~BODY_CLIP_SECONDS. This is what actually makes the two zones LOOK
+  //    different: narration scenes are often only ~4-6s, so without merging UP to
+  //    the body target the body would flip every ~5s just like the intro (the
+  //    "intro and body look the same" complaint). The segment keeps the FIRST
+  //    scene's footage for the whole span, so a stray micro-scene ("candy.")
+  //    never gets its own literal clip. Never merge below MIN_SCENE_SECONDS. A
+  //    segment's zone is decided by its START time (the intro boundary above).
+  const zoneTargetMs = (segStartMs: number) => {
+    const isBody = introMs > 0 && segStartMs >= introMs;
+    const clipSec = isBody ? bodyClipSec : introClipSec;
+    return Math.max(minSceneMs, clipSec * 1000);
+  };
   type Segment = { scene: Scene; startMs: number; endMs: number };
   const segments: Segment[] = [];
   for (const scene of scenes) {
     const range = rangeByScene.get(scene.index) ?? { sceneIdx: scene.index, startMs: 0, endMs: 0 };
     const prev = segments[segments.length - 1];
-    if (prev && prev.endMs - prev.startMs < minSceneMs) {
-      prev.endMs = range.endMs; // previous segment still too short → extend it, keep its visual
+    if (prev && prev.endMs - prev.startMs < zoneTargetMs(prev.startMs)) {
+      prev.endMs = range.endMs; // segment hasn't reached its zone's target yet → extend it, keep its visual
     } else {
       segments.push({ scene, startMs: range.startMs, endMs: range.endMs });
     }
@@ -319,7 +331,7 @@ async function runSingleShot(
   // Fold a too-short FINAL segment back into the previous one.
   if (segments.length >= 2) {
     const lastSeg = segments[segments.length - 1];
-    if (lastSeg.endMs - lastSeg.startMs < minSceneMs) {
+    if (lastSeg.endMs - lastSeg.startMs < zoneTargetMs(lastSeg.startMs)) {
       segments[segments.length - 2].endMs = lastSeg.endMs;
       segments.pop();
     }
@@ -340,11 +352,14 @@ async function runSingleShot(
     if (isBody) bodySegs++; else introSegs++;
     // LANE: body is always a Ken-Burns photo; the intro mixes video + a few photos.
     const mode: AssetMode = isBody ? "photo" : (introPhotoScenes.has(scene.index) ? "photo" : "video");
-    // PACING: how often the picture changes in this zone.
+    // PACING: how often the picture changes in this zone. Only split a segment
+    // that runs CLEARLY longer than the zone target (>1.5×) — a segment merged to
+    // ~target (or a little over) must stay whole, not get chopped back into two
+    // half-length clips. Round to the nearest count for even ~target-length pieces.
     const zoneClipSec = isBody ? bodyClipSec : introClipSec;
     const sliceMs = Math.max(0, seg.endMs - seg.startMs);
     const sliceSec = sliceMs / 1000;
-    const segCount = zoneClipSec > 0 && sliceSec > zoneClipSec ? Math.ceil(sliceSec / zoneClipSec) : 1;
+    const segCount = zoneClipSec > 0 && sliceSec > zoneClipSec * 1.5 ? Math.round(sliceSec / zoneClipSec) : 1;
     const padded = String(scene.index).padStart(3, "0");
 
     if (segCount <= 1) {
@@ -376,7 +391,7 @@ async function runSingleShot(
         `INTRO 0:00–${fmtMmSs(introMs)} (video+photo, ~${introClipSec}s each) · ` +
         `BODY ${fmtMmSs(introMs)}–${fmtMmSs(totalMs)} (photo-only Ken-Burns, ~${bodyClipSec}s each)` +
         (introWasCapped
-          ? ` · NOTE: this video is short, so the intro was capped to ${Math.round(introFrac * 100)}% of it (your INTRO_SECONDS=${introSecondsRaw}s would otherwise cover the whole video)`
+          ? ` · NOTE: short video (${fmtMmSs(totalMs)}), so the intro was trimmed from your ${introSecondsRaw}s setting to ${fmtMmSs(introMs)} (the ${Math.round(introFrac * 100)}% cap) to keep a visible body zone`
           : ""),
       { stage: "pipeline" }
     );
