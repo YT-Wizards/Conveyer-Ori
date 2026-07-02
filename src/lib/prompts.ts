@@ -20,6 +20,7 @@ CRITICAL RULES:
 For EACH scene, return a JSON object with:
 - "text": the exact verbatim slice of the script (no edits, no punctuation changes).
 - "visual_queries": an ARRAY of 2–3 SHORT Pexels search queries (BEST first), each 2–5 words, describing what the viewer should SEE while this line is narrated. Rules:
+    • **FACELESS CHANNEL — DO NOT SHOW PEOPLE.** Never search for a person, a face, a portrait, or someone performing a role ("guitarist playing", "man holding guitar", "musician", "singer", "soldier", "scientist in lab", "young man"). A stock stranger standing in for someone in the story looks wrong, off-topic, and raises rights problems. Instead show the WORLD around the story: the OBJECTS (a guitar, strings, an amplifier, a vinyl record, a rifle, tools, documents), the PLACES (an empty recording studio, a stage, a workshop, a city street, a landscape), close-up DETAILS, and the era/mood (vintage, film grain, stage lights, archival). If a human element is genuinely unavoidable, use HANDS ONLY, a SILHOUETTE, or a distant BACK-VIEW / crowd — NEVER a clear face or portrait.
     • Describe the MAIN visual of the WHOLE thought, judged from context — NOT a literal match of every word.
     • **CARRY THE SETTING.** Keep the current location/place in the query when the sentence itself doesn't name one. Example: if the story is set in a pharmacy and the line is "you put the bottle in your basket", search "pharmacy shopping basket" / "drugstore shelf products" — NOT a bare "bottle" or a random "bathroom basket". The setting only changes when the script clearly moves somewhere else.
     • **IGNORE incidental or out-of-place words.** For "you grab your rusty wrench from the garage, candy" → "rusty wrench garage", "tools workbench" — NEVER "candy".
@@ -38,7 +39,7 @@ Return a STRICTLY valid JSON array — no markdown, no explanations.`,
  * re-seeds existing installs to the new default once (there is no prompt-edit UI,
  * so the stored row is always our seeded default — safe to overwrite).
  */
-const SCENE_SPLIT_VERSION = "5";
+const SCENE_SPLIT_VERSION = "6";
 
 const getStmt = db.prepare("SELECT content FROM prompts WHERE name = ?");
 const upsertStmt = db.prepare(

@@ -182,7 +182,7 @@ const insertVisionCacheStmt = db.prepare("INSERT OR REPLACE INTO vision_cache (k
 
 /** Bump this whenever the vision PROMPT changes so stale cached scores (judged
  *  under the old rules) are invalidated instead of masking the new behavior. */
-const VISION_PROMPT_VERSION = "2";
+const VISION_PROMPT_VERSION = "3";
 
 // ── Cache Helper Functions ───────────────────────────────────────────────────
 
@@ -1528,6 +1528,7 @@ async function aiScoreHitsByVision(
           `THIS MOMENT (narration): "${sceneText.slice(0, 300)}".\n\n` +
           `${usable.length} candidates follow, each labelled "index N" with its preview image. LOOK AT EACH IMAGE and score 0-100 how well what is ACTUALLY SHOWN fits this moment AND the overall topic. Judge only by visible content, never by any text.\n` +
           `Apply these criteria in order: (1) semantic relevance to this moment AND the topic [PRIMARY]; (2) prefer cinematic documentary shots — wide, establishing, aerial, clean composition; (3) penalize static single-subject snapshots, amateur quality, cluttered or low-resolution framing.\n` +
+          `FACELESS RULE (IMPORTANT): this is a faceless channel — a shot whose MAIN subject is an identifiable PERSON or FACE (a stock stranger standing in for someone in the story) is WRONG and looks off-topic; score it 25 or below. Strongly prefer objects, places, landscapes, architecture, close-up details, archival imagery, hands-only or silhouettes. A distant crowd, a pair of working hands, or a blurred/back-view figure is fine IF on-topic.\n` +
           `DOMAIN RULE: an image that merely LOOKS similar but belongs to a DIFFERENT real-world domain, ERA or region than the topic is WRONG — score it 20 or below (e.g. for a video about ANTIQUE firearms, a modern handgun or an unrelated workshop product is off-topic even if it is "a gun"). BUT do NOT penalize footage merely for lacking the EXACT brand, model, label or precise year — stock libraries rarely have those, and generic SAME-CATEGORY footage is valid supporting B-roll.\n` +
           `SCORING BANDS: 100 = exactly the wanted subject, on-topic, well shot; 85-95 = correct domain AND highly usable; 75-84 = same subject CATEGORY (strong supporting B-roll); 40-74 = only loosely related; 0-39 = wrong domain/era/region, misleading, or low quality.\n` +
           `Return STRICTLY a JSON array [{"i":<N>,"score":<int>}] covering all ${usable.length}. No markdown.`,
