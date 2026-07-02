@@ -51,21 +51,12 @@ export function resolveTtsProvider(): "ai33pro" | "69labs" | "kokoro" | "minimax
   const hasAi33 = getSetting("AI33PRO_API_KEY").trim().length > 0;
   const has69 = getSetting("LABS69_API_KEY").trim().length > 0;
   const hasMinimax = getSetting("MINIMAX_API_KEY").trim().length > 0;
-  const hasGenaipro = getSetting("GENAIPRO_API_KEY").trim().length > 0;
-  const hasElevenlabs = getSetting("ELEVENLABS_API_KEY").trim().length > 0;
-  if (selected === "elevenlabs") {
-    if (hasElevenlabs) return "elevenlabs";
-    if (hasGenaipro) return "genaipro";
-    if (hasAi33) return "ai33pro";
-    if (has69) return "69labs";
-    return "elevenlabs"; // a clear "ELEVENLABS_API_KEY not set" error surfaces later
-  }
-  if (selected === "genaipro") {
-    if (hasGenaipro) return "genaipro";
-    if (hasAi33) return "ai33pro";
-    if (has69) return "69labs";
-    return "genaipro"; // a clear "GENAIPRO_API_KEY not set" error surfaces later
-  }
+  // Distinct PAID providers (elevenlabs / genaipro) are STRICT: use exactly the
+  // one you picked. We never silently fall back to a DIFFERENT paid account —
+  // that would spend credits you meant to save. A missing key surfaces a clear
+  // "<X>_API_KEY not set" error at synthesis time so the user knows to fix it.
+  if (selected === "elevenlabs") return "elevenlabs";
+  if (selected === "genaipro") return "genaipro";
   if (selected === "minimax-ai33pro") {
     return hasAi33 || !hasMinimax ? "minimax-ai33pro" : "minimax";
   }
