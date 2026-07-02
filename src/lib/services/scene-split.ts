@@ -24,6 +24,13 @@ export interface Scene {
    * when TEXT_OVERLAY_MODE is on (scoped to the hook by default).
    */
   overlay?: string;
+  /**
+   * Which two-zone lane this scene belongs to, when the script was entered as
+   * SEPARATE intro + body fields (the user tells us the boundary explicitly, so
+   * we don't guess it by time). Absent when a single combined script is used —
+   * then the zone is decided by the INTRO_SECONDS time boundary instead.
+   */
+  zone?: "intro" | "body";
 }
 
 export async function splitScript(runId: string, script: string): Promise<Scene[]> {

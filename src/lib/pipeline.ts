@@ -27,7 +27,11 @@ const updateRun = db.prepare(
 
 type SceneResult = AssembleInput | null;
 
-export async function runPipeline(runId: string, script: string) {
+export async function runPipeline(
+  runId: string,
+  script: string,
+  zones?: { introScript: string; bodyScript: string }
+) {
   const runDir = getRunDir(runId);
   const audioDir = path.join(runDir, "audio");
   const animDir = path.join(runDir, "animations");
@@ -38,8 +42,29 @@ export async function runPipeline(runId: string, script: string) {
     updateRun.run("running", null, runId);
     log(runId, "info", `Pipeline started · folder: ${path.basename(runDir)}`, { stage: "pipeline" });
 
-    // 1. Split script into scenes via Gemini.
-    const scenes = await splitScript(runId, script);
+    // 1. Split script into scenes via Gemini. Two input shapes:
+    //    - SEPARATE intro + body fields (zones): split each independently and TAG
+    //      every scene with its lane, so the two-zone boundary is EXACT (the user
+    //      told us where it is) and the "intro:/body:" label words are never
+    //      voiced. The voiceover is still ONE continuous take over intro+body.
+    //    - single combined script: split once, no tags → the zone is decided by
+    //      the INTRO_SECONDS time boundary later (legacy / smoke path).
+    let scenes: Scene[];
+    if (zones && zones.introScript.trim() && zones.bodyScript.trim()) {
+      const introScenes = await splitScript(runId, zones.introScript.trim());
+      const bodyScenes = await splitScript(runId, zones.bodyScript.trim());
+      for (const s of introScenes) s.zone = "intro";
+      for (const s of bodyScenes) s.zone = "body";
+      scenes = [...introScenes, ...bodyScenes].map((s, i) => ({ ...s, index: i }));
+      log(
+        runId,
+        "info",
+        `Two-zone input: ${introScenes.length} intro scene(s) + ${bodyScenes.length} body scene(s) — one continuous voiceover, per-zone visuals`,
+        { stage: "scene_split" }
+      );
+    } else {
+      scenes = await splitScript(runId, script);
+    }
     checkCancelled(runId);
     fs.writeFileSync(path.join(runDir, "scenes.json"), JSON.stringify(scenes, null, 2), "utf-8");
 
@@ -303,6 +328,11 @@ async function runSingleShot(
   const rangeByScene = new Map<number, SceneAudioRange>();
   for (const r of globalAudio.ranges) rangeByScene.set(r.sceneIdx, r);
 
+  // Whether the caller gave SEPARATE intro + body fields (scenes carry a zone
+  // tag → the boundary is EXACT) or a single combined script (zone decided by
+  // the INTRO_SECONDS time boundary computed above).
+  const usingFieldZones = scenes.some((s) => s.zone === "intro" || s.zone === "body");
+
   // 3. MERGE adjacent scenes into "segments" so each visual holds for roughly its
   //    ZONE's target time — an intro visual ~INTRO_CLIP_SECONDS, a body photo
   //    ~BODY_CLIP_SECONDS. This is what actually makes the two zones LOOK
@@ -310,33 +340,41 @@ async function runSingleShot(
   //    the body target the body would flip every ~5s just like the intro (the
   //    "intro and body look the same" complaint). The segment keeps the FIRST
   //    scene's footage for the whole span, so a stray micro-scene ("candy.")
-  //    never gets its own literal clip. Never merge below MIN_SCENE_SECONDS. A
-  //    segment's zone is decided by its START time (the intro boundary above).
-  const zoneTargetMs = (segStartMs: number) => {
-    const isBody = introMs > 0 && segStartMs >= introMs;
-    const clipSec = isBody ? bodyClipSec : introClipSec;
+  //    never gets its own literal clip. Never merge below MIN_SCENE_SECONDS, and
+  //    NEVER merge across the intro→body boundary (a segment is one zone only).
+  type Segment = { scene: Scene; startMs: number; endMs: number };
+  const segIsBody = (seg: Segment) =>
+    usingFieldZones ? seg.scene.zone === "body" : introMs > 0 && seg.startMs >= introMs;
+  const zoneTargetMs = (seg: Segment) => {
+    const clipSec = segIsBody(seg) ? bodyClipSec : introClipSec;
     return Math.max(minSceneMs, clipSec * 1000);
   };
-  type Segment = { scene: Scene; startMs: number; endMs: number };
   const segments: Segment[] = [];
   for (const scene of scenes) {
     const range = rangeByScene.get(scene.index) ?? { sceneIdx: scene.index, startMs: 0, endMs: 0 };
     const prev = segments[segments.length - 1];
-    if (prev && prev.endMs - prev.startMs < zoneTargetMs(prev.startMs)) {
+    const sameZone = !!prev && (!usingFieldZones || prev.scene.zone === scene.zone);
+    if (prev && sameZone && prev.endMs - prev.startMs < zoneTargetMs(prev)) {
       prev.endMs = range.endMs; // segment hasn't reached its zone's target yet → extend it, keep its visual
     } else {
       segments.push({ scene, startMs: range.startMs, endMs: range.endMs });
     }
   }
-  // Fold a too-short FINAL segment back into the previous one.
+  // Fold a too-short FINAL segment back into the previous one (same zone only).
   if (segments.length >= 2) {
     const lastSeg = segments[segments.length - 1];
-    if (lastSeg.endMs - lastSeg.startMs < zoneTargetMs(lastSeg.startMs)) {
-      segments[segments.length - 2].endMs = lastSeg.endMs;
+    const prevSeg = segments[segments.length - 2];
+    const sameZone = !usingFieldZones || prevSeg.scene.zone === lastSeg.scene.zone;
+    if (sameZone && lastSeg.endMs - lastSeg.startMs < zoneTargetMs(lastSeg)) {
+      prevSeg.endMs = lastSeg.endMs;
       segments.pop();
     }
   }
   const mergedAway = scenes.length - segments.length;
+  // The intro→body boundary in TIME: where the first body segment starts (for the
+  // field-zone log; identical to introMs in the time-based path).
+  const firstBody = segments.find((s) => segIsBody(s));
+  const boundaryMs = usingFieldZones ? (firstBody ? firstBody.startMs : totalMs) : introMs;
 
   // 4. Build the sub-clip plan from segments, applying the two zones. Each
   //    segment is intro or body by its aligned start; the zone decides BOTH the
@@ -348,7 +386,7 @@ async function runSingleShot(
   let bodySegs = 0;
   for (const seg of segments) {
     const scene = seg.scene;
-    const isBody = seg.startMs >= introMs;
+    const isBody = segIsBody(seg);
     if (isBody) bodySegs++; else introSegs++;
     // LANE: body is always a Ken-Burns photo; the intro mixes video + a few photos.
     const mode: AssetMode = isBody ? "photo" : (introPhotoScenes.has(scene.index) ? "photo" : "video");
@@ -381,7 +419,16 @@ async function runSingleShot(
   const photoPlans = plans.filter((p) => p.mode === "photo").length;
   // Explicit, human-readable zone boundary so it's obvious in the log WHERE the
   // intro ends and the body begins (and whether the short-video cap kicked in).
-  if (introMs <= 0) {
+  if (usingFieldZones) {
+    log(
+      runId,
+      "info",
+      `Two-zone (by intro/body fields) · boundary at ${fmtMmSs(boundaryMs)} of ${fmtMmSs(totalMs)} · ` +
+        `INTRO 0:00–${fmtMmSs(boundaryMs)} (video+photo, ~${introClipSec}s each) · ` +
+        `BODY ${fmtMmSs(boundaryMs)}–${fmtMmSs(totalMs)} (photo-only Ken-Burns, ~${bodyClipSec}s each)`,
+      { stage: "pipeline" }
+    );
+  } else if (introMs <= 0) {
     log(runId, "info", `Two-zone: intro OFF — whole video is body (${fmtMmSs(totalMs)}, photo-only Ken-Burns, ~${bodyClipSec}s each)`, { stage: "pipeline" });
   } else {
     log(

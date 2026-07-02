@@ -18,9 +18,19 @@ interface StatsResp {
   assembleConcurrency: number;
 }
 
+function countWords(text: string): number {
+  const t = text.trim();
+  return t ? t.split(/\s+/).length : 0;
+}
+
 export default function NewRunPage() {
   const [title, setTitle] = usePersistedState("newrun.title", "");
-  const [script, setScript] = usePersistedState("newrun.script", "");
+  // Two-zone input: an engaging INTRO (fast, mostly video) and the slow BODY
+  // (photos with Ken-Burns). They are voiced as ONE continuous voiceover, but the
+  // visuals use each zone's own pace + photo/video mix. Paste each part in its own
+  // box so the label words are never read aloud and the boundary is exact.
+  const [introScript, setIntroScript] = usePersistedState("newrun.introScript", "");
+  const [bodyScript, setBodyScript] = usePersistedState("newrun.bodyScript", "");
   const [busy, setBusy] = useState(false);
   const [stats, setStats] = useState<StatsResp | null>(null);
 
@@ -34,19 +44,22 @@ export default function NewRunPage() {
   }, []);
 
   const scriptStats = useMemo(() => {
-    const text = script.trim();
-    const words = text ? text.split(/\s+/).length : 0;
-    const chars = text.length;
+    const introWords = countWords(introScript);
+    const bodyWords = countWords(bodyScript);
+    const words = introWords + bodyWords;
+    const chars = introScript.trim().length + bodyScript.trim().length;
     const seconds = (words / WORDS_PER_MINUTE) * 60;
     const m = Math.floor(seconds / 60);
     const s = Math.round(seconds % 60);
     return {
       words,
+      introWords,
+      bodyWords,
       chars,
       duration: words === 0 ? "—" : m > 0 ? `~${m} min ${s} s` : `~${s} s`,
       scenes: Math.max(1, Math.round(seconds / 5)),
     };
-  }, [script]);
+  }, [introScript, bodyScript]);
 
   const timeEstimate = useMemo(() => {
     if (!stats || scriptStats.scenes === 0) return null;
@@ -58,13 +71,15 @@ export default function NewRunPage() {
     return { total: phase1 + phase2, phase1, phase2, ttsMin, animMin };
   }, [stats, scriptStats]);
 
+  const canRun = bodyScript.trim().length > 0 || introScript.trim().length > 0;
+
   async function start() {
     setBusy(true);
     try {
       const r = await fetch("/api/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, script }),
+        body: JSON.stringify({ title, introScript, bodyScript }),
       });
       if (!r.ok) {
         alert(`Error: ${await r.text()}`);
@@ -81,8 +96,9 @@ export default function NewRunPage() {
     <div>
       <h1>Video Conveyer</h1>
       <p className="muted" style={{ marginBottom: 24, fontSize: 14 }}>
-        Paste a script — the system splits it into scenes, generates voiceover and matches Pexels
-        stock footage per scene, then assembles the final MP4.
+        Paste your script in two parts — a fast, engaging <strong>Intro</strong> (mostly video) and the
+        slow <strong>Body</strong> (photos). They are voiced as one continuous voiceover, and each part
+        gets its own pacing and photo/video mix automatically.
       </p>
 
       <div className="card" style={{ display: "grid", gap: 16 }}>
@@ -92,18 +108,37 @@ export default function NewRunPage() {
             className="input"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Okinawa Longevity — Test 1"
+            placeholder="e.g. Jason Becker — Blue Guitar"
           />
         </div>
 
         <div>
-          <label className="label">Script</label>
+          <label className="label">
+            Intro script <span className="faint">— fast, mostly video (~5s per clip)</span>
+          </label>
           <textarea
             className="textarea"
-            rows={14}
-            value={script}
-            onChange={(e) => setScript(e.target.value)}
-            placeholder="Paste the full narrator script here..."
+            rows={7}
+            value={introScript}
+            onChange={(e) => setIntroScript(e.target.value)}
+            placeholder="Paste the intro / hook here. Leave empty for no intro (whole video = slow photos)."
+          />
+          <div className="faint" style={{ fontSize: 12.5, marginTop: 6 }}>
+            {scriptStats.introWords} words
+            {scriptStats.introWords > 0 ? ` · ≈ ${Math.round((scriptStats.introWords / WORDS_PER_MINUTE) * 60)}s` : ""}
+          </div>
+        </div>
+
+        <div>
+          <label className="label">
+            Body script <span className="faint">— slow photos, Ken-Burns (~12–15s per photo)</span>
+          </label>
+          <textarea
+            className="textarea"
+            rows={12}
+            value={bodyScript}
+            onChange={(e) => setBodyScript(e.target.value)}
+            placeholder="Paste the main body of the script here..."
           />
           <div
             style={{
@@ -116,7 +151,7 @@ export default function NewRunPage() {
             }}
           >
             <span>
-              <strong style={{ color: "var(--fg)" }}>{scriptStats.words}</strong> words
+              <strong style={{ color: "var(--fg)" }}>{scriptStats.words}</strong> words total
             </span>
             <span>
               <strong style={{ color: "var(--fg)" }}>{scriptStats.chars}</strong> chars
@@ -131,7 +166,7 @@ export default function NewRunPage() {
         </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button className="btn" onClick={start} disabled={busy || !script.trim()}>
+          <button className="btn" onClick={start} disabled={busy || !canRun}>
             {busy ? "Starting…" : "Run pipeline"}
           </button>
         </div>
@@ -179,9 +214,9 @@ export default function NewRunPage() {
       <div className="card" style={{ marginTop: 16 }}>
         <h2 style={{ marginBottom: 8 }}>What happens next</h2>
         <ol style={{ paddingLeft: 20, lineHeight: 1.75, margin: 0, color: "var(--fg-muted)", fontSize: 13.5 }}>
-          <li>Gemini splits the script into scenes, each with a visual prompt.</li>
-          <li>Per scene, ai33pro narration (ElevenLabs voice) and a Pexels stock clip generate in parallel.</li>
-          <li>FFmpeg stitches all clips together with crossfade transitions.</li>
+          <li>Intro and Body are joined into ONE continuous voiceover (no pause, labels never voiced).</li>
+          <li>Gemini splits each part into scenes; the Intro gets fast video+photo, the Body slow photos.</li>
+          <li>Footage is matched per scene, then FFmpeg assembles the final MP4.</li>
         </ol>
         <p className="faint" style={{ fontSize: 12.5, marginTop: 10, marginBottom: 0 }}>
           Live logs for every stage stream into the run page in real time.
