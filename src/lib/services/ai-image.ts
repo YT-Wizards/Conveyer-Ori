@@ -5,6 +5,7 @@ import { getSetting } from "../settings";
 import { log } from "../logger";
 import type { Scene } from "./scene-split";
 import { effectiveStyle } from "./style";
+import { recordAiImage } from "./cost-ledger";
 
 /**
  * AI image FALLBACK for the footage layer.
@@ -301,6 +302,7 @@ export async function tryAiPhotoFallback(
       log(runId, "warn", `Scene #${scene.index}: AI image gen failed (${(e as Error).message.slice(0, 120)})`, { stage: "animate" });
       continue;
     }
+    recordAiImage(runId, provider); // one paid generation
     const score = await scoreAiImage(scene.text, videoContext, tmp, base);
     if (!best || score > best.score) {
       if (best) { try { fs.unlinkSync(best.tmp); } catch { /* ignore */ } }

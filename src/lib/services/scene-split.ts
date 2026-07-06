@@ -4,6 +4,7 @@ import { getSetting } from "../settings";
 import { getPrompt } from "../prompts";
 import { log } from "../logger";
 import { getRunDir } from "../run-paths";
+import { recordGemini } from "./cost-ledger";
 
 export interface Scene {
   index: number;
@@ -89,7 +90,7 @@ async function processChunk(
   const provider = (getSetting("SCENE_SPLIT_PROVIDER") || "gemini").trim().toLowerCase();
   const raw = provider === "openai"
     ? await splitWithOpenAI(systemPrompt, scriptChunk)
-    : await splitWithGemini(systemPrompt, scriptChunk);
+    : await splitWithGemini(systemPrompt, scriptChunk, runId);
 
   let json: unknown;
   try {
@@ -239,7 +240,7 @@ async function splitWithOpenAI(systemPrompt: string, script: string): Promise<st
   throw new Error(lastErr);
 }
 
-async function splitWithGemini(systemPrompt: string, script: string): Promise<string> {
+async function splitWithGemini(systemPrompt: string, script: string, runId: string | null): Promise<string> {
   const apiKey = getSetting("GOOGLE_API_KEY");
   if (!apiKey) throw new Error("GOOGLE_API_KEY is not set (Settings)");
   const model = getSetting("SCENE_SPLIT_MODEL") || "gemini-2.5-flash";
@@ -292,6 +293,7 @@ async function splitWithGemini(systemPrompt: string, script: string): Promise<st
         );
       }
       if (!text) throw new Error(`Gemini: empty output (${JSON.stringify(json).slice(0, 300)})`);
+      if (runId) recordGemini(runId, json.usageMetadata?.promptTokenCount ?? 0, json.usageMetadata?.candidatesTokenCount ?? 0, model);
       return text;
     }
     const errText = (await resp.text()).slice(0, 400);

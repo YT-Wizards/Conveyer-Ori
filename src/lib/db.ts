@@ -37,9 +37,10 @@ interface Store {
   search_cache: Row[];
   download_cache: Row[];
   vision_cache: Row[];
+  run_costs: Row[];
 }
 function emptyStore(): Store {
-  return { settings: [], prompts: [], runs: [], search_cache: [], download_cache: [], vision_cache: [] };
+  return { settings: [], prompts: [], runs: [], search_cache: [], download_cache: [], vision_cache: [], run_costs: [] };
 }
 
 let store: Store;
@@ -208,3 +209,15 @@ const db = {
 };
 
 export default db;
+
+// ── Cost ledger ───────────────────────────────────────────────────────────────
+// A plain append-only array in the JSON store. (Ori's prepare() only knows the
+// exact SQL strings above and THROWS on anything else, so the cost ledger is NOT
+// modelled as SQL — it's direct array ops sharing the same debounced save().)
+export function pushCostRow(row: Row): void {
+  store.run_costs.push(row);
+  save();
+}
+export function readCostRows(): Row[] {
+  return store.run_costs;
+}

@@ -12,6 +12,7 @@ import { elevenLabsTts } from "./elevenlabs-voice";
 import { createTtsJob, pollJob, downloadJob } from "./labs69";
 import { probeDurationSafe, applyAudioTempo, resolveFfmpegBinary } from "./video-assemble";
 import { pLimit } from "../plimit";
+import { recordVoice } from "./cost-ledger";
 
 export interface TtsResult {
   /** Path to the mp3 file. */
@@ -107,6 +108,9 @@ async function dispatchTts(
   } else {
     await ai33proTts(runId, text, outPath);
   }
+  // Cost: ElevenLabs-family bills per character; GenAIPro per task (recordVoice
+  // handles the split). Recorded only after a successful synthesis.
+  recordVoice(runId, provider, text.length, getSetting("TTS_MODEL") || getSetting("GENAIPRO_TTS_MODEL") || "");
 }
 
 /**

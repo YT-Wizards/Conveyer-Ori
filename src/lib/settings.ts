@@ -51,6 +51,17 @@ export const SETTING_KEYS = [
   "STYLE_ENABLED",             // on | off — apply the channel style to AI generation and stock scoring
   "STYLE_TEXT",                // the user's own written style description
   "STYLE_PROFILE",             // Gemini-derived style profile from the reference images + text (auto-generated)
+
+  // ── Cost rates (list prices, USD; the /costs tab uses these) ──
+  "COST_USD_TO_EUR",              // display FX (1.0 = show USD; set 0.92 for EUR)
+  "COST_GEMINI_IN_USD_PER_1M",    // gemini-2.5-flash input tokens $/1M
+  "COST_GEMINI_OUT_USD_PER_1M",   // gemini-2.5-flash output tokens $/1M
+  "COST_GEMINI_IMAGE_USD",        // gemini-2.5-flash-image $/generated image (flat; no usageMetadata)
+  "COST_KIE_IMAGE_USD",           // kie.ai nano-banana $/image
+  "COST_GENAIPRO_IMAGE_USD",      // GenAIPro nano_banana_pro $/image (0 = credit-based, unknown $)
+  "COST_ELEVENLABS_USD_PER_1K_CHARS", // ElevenLabs $/1000 characters
+  "COST_GENAIPRO_TTS_USD_PER_TASK",   // GenAIPro voice $/task (0 = credit-based, unknown $)
+  "COST_GROQ_WHISPER_USD_PER_HOUR",   // Groq whisper-large-v3 $/audio-hour
   "VIDEO_MATCH_MIN",           // videos below this vision score (0..1) prefer an on-topic AI still (Ken-Burns) over a weak/loosely-related clip
   "GEMINI_VISION_MODEL",       // Gemini model used for vision/preview image scoring
   "PRODUCTION_MODE",           // quality | balanced (default) | batch
@@ -234,6 +245,15 @@ export const DEFAULTS: Record<SettingKey, string> = {
   STYLE_ENABLED: "on",
   STYLE_TEXT: "",
   STYLE_PROFILE: "",
+  COST_USD_TO_EUR: "1.0",
+  COST_GEMINI_IN_USD_PER_1M: "0.30",
+  COST_GEMINI_OUT_USD_PER_1M: "2.50",
+  COST_GEMINI_IMAGE_USD: "0.039",
+  COST_KIE_IMAGE_USD: "0.02",
+  COST_GENAIPRO_IMAGE_USD: "0",
+  COST_ELEVENLABS_USD_PER_1K_CHARS: "0.22",
+  COST_GENAIPRO_TTS_USD_PER_TASK: "0",
+  COST_GROQ_WHISPER_USD_PER_HOUR: "0.111",
   GEMINI_VISION_MODEL: "gemini-2.5-flash",
   PRODUCTION_MODE: "balanced",
   FOOTAGE_SEARCH_ATTEMPTS: "3",

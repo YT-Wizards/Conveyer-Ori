@@ -6,6 +6,7 @@ import { log } from "../logger";
 import { synthesizeFullScript } from "./tts";
 import { downsampleForTranscription, capPauses, probeDurationSafe } from "./video-assemble";
 import type { Scene } from "./scene-split";
+import { recordWhisper, recordRunDuration } from "./cost-ledger";
 
 /** One transcribed word from Whisper, in milliseconds. */
 export interface TranscriptWord {
@@ -121,6 +122,10 @@ export async function synthesizeAndAlign(
   );
   const transcript = await transcribeWithGroqWhisper(runId, audioPath);
   log(runId, "info", `Groq Whisper returned ${transcript.length} words`, { stage: "tts_align" });
+  // Cost: Groq Whisper billed per audio-hour + record run duration (≈ VO length,
+  // which equals the final video) for the /costs $/minute figure.
+  recordWhisper(runId, audioDurationSec);
+  recordRunDuration(runId, audioDurationSec);
 
   // 3. Align scene texts to transcript timestamps.
   const totalDurationMs = Math.round(audioDurationSec * 1000);

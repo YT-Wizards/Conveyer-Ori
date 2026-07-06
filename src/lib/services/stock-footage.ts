@@ -10,6 +10,7 @@ import { checkCancelled } from "../cancellation";
 import type { Scene } from "./scene-split";
 import { tryAiPhotoFallback } from "./ai-image";
 import { effectiveStyle } from "./style";
+import { recordGemini } from "./cost-ledger";
 
 /**
  * Pexels stock footage service — search + download.
@@ -1588,7 +1589,12 @@ async function aiScoreHitsByVision(
           }
           throw new Error(`Gemini vision ${r.status}`);
         }
-        const j = (await r.json()) as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[] };
+        const j = (await r.json()) as {
+          candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
+          usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+        };
+        // Record cost BEFORE any throw — Google bills truncated MAX_TOKENS retries too.
+        recordGemini(runId, j.usageMetadata?.promptTokenCount ?? 0, j.usageMetadata?.candidatesTokenCount ?? 0, model);
         const cand = j.candidates?.[0];
         const text = cand?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
         // Empty/truncated multimodal bodies (finishReason MAX_TOKENS) are the #1
@@ -1794,7 +1800,11 @@ async function qcVideoClip(
       }
     );
     if (!r.ok) return { ok: true };
-    const j = (await r.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+    const j = (await r.json()) as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[];
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+    };
+    recordGemini(runId, j.usageMetadata?.promptTokenCount ?? 0, j.usageMetadata?.candidatesTokenCount ?? 0, model);
     const text = j.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
     const arr = JSON.parse(text.match(/\[[\s\S]*\]/)?.[0] ?? text) as { i: number; person?: string; text?: string }[];
     if (!Array.isArray(arr) || arr.length === 0) return { ok: true };
