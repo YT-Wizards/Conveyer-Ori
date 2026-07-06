@@ -46,6 +46,11 @@ export const SETTING_KEYS = [
   "FOOTAGE_AI_PICK",           // on | off — Gemini Vision scores candidate thumbnails
   "FOOTAGE_QC_ENABLED",        // on | off — per-frame QC on downloaded video clips (reject people/faces + burned-in captions)
   "IMAGE_MATCH_MIN",           // photos below this vision score (0..1) prefer an on-topic AI image over the weak real photo (VIP image bar ≈ 0.8)
+
+  // ── Channel style (owned by the /style page, not the settings form) ──
+  "STYLE_ENABLED",             // on | off — apply the channel style to AI generation and stock scoring
+  "STYLE_TEXT",                // the user's own written style description
+  "STYLE_PROFILE",             // Gemini-derived style profile from the reference images + text (auto-generated)
   "VIDEO_MATCH_MIN",           // videos below this vision score (0..1) prefer an on-topic AI still (Ken-Burns) over a weak/loosely-related clip
   "GEMINI_VISION_MODEL",       // Gemini model used for vision/preview image scoring
   "PRODUCTION_MODE",           // quality | balanced (default) | batch
@@ -226,6 +231,9 @@ export const DEFAULTS: Record<SettingKey, string> = {
   FOOTAGE_QC_ENABLED: "on",
   IMAGE_MATCH_MIN: "0.8",
   VIDEO_MATCH_MIN: "0.55",
+  STYLE_ENABLED: "on",
+  STYLE_TEXT: "",
+  STYLE_PROFILE: "",
   GEMINI_VISION_MODEL: "gemini-2.5-flash",
   PRODUCTION_MODE: "balanced",
   FOOTAGE_SEARCH_ATTEMPTS: "3",

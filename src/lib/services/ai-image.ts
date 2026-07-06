@@ -4,6 +4,7 @@ import path from "node:path";
 import { getSetting } from "../settings";
 import { log } from "../logger";
 import type { Scene } from "./scene-split";
+import { effectiveStyle } from "./style";
 
 /**
  * AI image FALLBACK for the footage layer.
@@ -193,9 +194,17 @@ const VARIANTS = [
 function buildAiPrompt(base: string, videoContext: string, variant: string): string {
   const noText =
     "absolutely no text, no captions, no words, no letters, no numbers, no labels, no logos, no signs, no writing on any object, no watermark";
-  const realism =
-    "photorealistic, real-world, high quality, sharp focus, natural lighting, documentary photography. " +
-    "NOT fantasy, NOT sci-fi, NOT surreal, NOT abstract, NOT illustration, NOT 3D render, no glowing magic, no neon";
+  // The channel style (from /style) is the primary look directive; the legacy
+  // AI_IMAGE_STYLE hint still applies on top if set.
+  const channelStyle = effectiveStyle().slice(0, 500);
+  // Without a channel style, default to documentary photorealism. WITH one, the
+  // style governs the medium — a "period engraving" style IS an illustration, so
+  // the hard "NOT illustration / photorealistic" clauses would fight it. Keep only
+  // the universal bans (fantasy/sci-fi/neon) in that case.
+  const realism = channelStyle
+    ? "authentic, high quality, aged real-world documentary look. NOT fantasy, NOT sci-fi, NOT surreal, NOT abstract, no glowing magic, no neon"
+    : "photorealistic, real-world, high quality, sharp focus, natural lighting, documentary photography. " +
+      "NOT fantasy, NOT sci-fi, NOT surreal, NOT abstract, NOT illustration, NOT 3D render, no glowing magic, no neon";
   // Faceless channel — the AI fallback must not reintroduce the stranger faces the
   // real-footage path filters out. Show the object / place / detail only.
   const faceless =
@@ -203,7 +212,7 @@ function buildAiPrompt(base: string, videoContext: string, variant: string): str
   const topic = (videoContext || "").trim().slice(0, 160);
   const contextAnchor = topic ? `in a documentary about: ${topic}` : "";
   const style = getSetting("AI_IMAGE_STYLE").trim();
-  return [base, contextAnchor, style, realism, faceless, noText, variant].filter(Boolean).join(", ");
+  return [base, contextAnchor, channelStyle, style, realism, faceless, noText, variant].filter(Boolean).join(", ");
 }
 
 /** Vision-score a generated image 0..1 (photorealism + on-topic + no baked text).
@@ -214,13 +223,15 @@ async function scoreAiImage(sceneText: string, videoContext: string, imagePath: 
   let bytes: Buffer;
   try { bytes = fs.readFileSync(imagePath); } catch { return 0; }
   const model = getSetting("GEMINI_VISION_MODEL") || "gemini-2.5-flash";
+  const channelStyle = effectiveStyle();
   const instr =
     `You are quality-checking ONE AI-generated image for a FACELESS documentary scene.\n` +
     `OVERALL VIDEO TOPIC: "${(videoContext || sceneText).slice(0, 300)}"\n` +
     `THIS SCENE: "${sceneText.slice(0, 200)}"\n` +
     (wantedVisual ? `WANTED VISUAL (the specific on-topic subject): "${wantedVisual.slice(0, 140)}"\n` : "") +
-    `Score 0-100: does the IMAGE show the WANTED VISUAL / fit this scene AND the topic, look photorealistic and high quality, ` +
-    `and contain NO readable text/letters/captions/fake labels? Score LOW (below 40) if it is off-subject, an illustration / 3D-render / cartoon, has baked-in or gibberish text, OR shows a PERSON or FACE as a main subject (this is a faceless channel — objects, places, and details only). Return STRICTLY JSON {"score":<int>}.`;
+    (channelStyle ? `REQUIRED STYLE (the channel's visual identity): "${channelStyle.slice(0, 400)}"\n` : "") +
+    `Score 0-100: does the IMAGE show the WANTED VISUAL / fit this scene AND the topic${channelStyle ? ", MATCH the required style (era, color treatment, texture, mood)" : ""}, look ${channelStyle ? "authentic" : "photorealistic"} and high quality, ` +
+    `and contain NO readable text/letters/captions/fake labels? Score LOW (below 40) if it is off-subject${channelStyle ? ", clearly off-style" : ""}, has baked-in or gibberish text, OR shows a PERSON or FACE as a main subject (this is a faceless channel — objects, places, and details only). Return STRICTLY JSON {"score":<int>}.`;
   const body = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: instr }, { inlineData: { mimeType: "image/jpeg", data: bytes.toString("base64") } }] }],
     generationConfig: { responseMimeType: "application/json", temperature: 0, maxOutputTokens: 2000, thinkingConfig: { thinkingBudget: 0 } },

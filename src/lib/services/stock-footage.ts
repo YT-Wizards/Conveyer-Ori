@@ -9,6 +9,7 @@ import { log } from "../logger";
 import { checkCancelled } from "../cancellation";
 import type { Scene } from "./scene-split";
 import { tryAiPhotoFallback } from "./ai-image";
+import { effectiveStyle } from "./style";
 
 /**
  * Pexels stock footage service — search + download.
@@ -1475,7 +1476,10 @@ async function aiScoreHitsByVision(
   }
 
   const model = getSetting("GEMINI_VISION_MODEL") || "gemini-2.5-flash";
-  const visualIntentRepr = `intent:${sceneText} want:${wantedVisual} context:${videoContext}`;
+  // Channel style participates in BOTH the prompt and the cache key — changing
+  // the style on /style must re-judge candidates, not reuse pre-style scores.
+  const channelStyle = effectiveStyle();
+  const visualIntentRepr = `intent:${sceneText} want:${wantedVisual} context:${videoContext} style:${channelStyle}`;
   const intentHash = getShortHash(visualIntentRepr);
 
   const scoresMap = new Map<string, number>();
@@ -1543,6 +1547,9 @@ async function aiScoreHitsByVision(
           `FACELESS RULE (IMPORTANT): this is a faceless channel — a shot whose MAIN subject is an identifiable PERSON or FACE (a stock stranger standing in for someone in the story) is WRONG and looks off-topic; score it 25 or below. Strongly prefer objects, places, landscapes, architecture, close-up details, archival imagery, hands-only or silhouettes. A distant crowd, a pair of working hands, or a blurred/back-view figure is fine IF on-topic.\n` +
           `DOMAIN RULE: an image that merely LOOKS similar but belongs to a DIFFERENT real-world domain, ERA or region than the topic is WRONG — score it 20 or below (e.g. for a video about ANTIQUE firearms, a modern handgun or an unrelated workshop product is off-topic even if it is "a gun"). BUT do NOT penalize footage merely for lacking the EXACT brand, model, label or precise year — stock libraries rarely have those, and generic SAME-CATEGORY footage is valid supporting B-roll.\n` +
           `AUTHENTICITY RULE: this must look like a REAL photograph or real video. Score 39 or below if the image is an OBVIOUS 3D/CGI render, a video-game screenshot, a digital illustration/cartoon/clip-art, an AI-looking picture, or carries GIBBERISH / fake made-up text or fake brand labels — even if the subject is on-topic. (Genuine period engravings, diagrams, blueprints, or archival scans of the real subject are FINE — those are real historical artifacts, not fakes.)\n` +
+          (channelStyle
+            ? `STYLE RULE (the channel's defined visual style): "${channelStyle.slice(0, 500)}". Prefer candidates that MATCH this look/era/mood. A candidate that clearly VIOLATES it — e.g. a modern-era object or setting when a period look is required, or bright contemporary color when an aged/monochrome look is required — scores 39 or below EVEN IF the subject is correct.\n`
+            : "") +
           `SCORING BANDS: 100 = exactly the wanted subject, on-topic, well shot; 85-95 = correct domain AND highly usable; 75-84 = same subject CATEGORY (strong supporting B-roll); 40-74 = only loosely related; 0-39 = wrong domain/era/region, misleading, or low quality.\n` +
           `Return STRICTLY a JSON array [{"i":<N>,"score":<int>}] covering all ${usable.length}. No markdown.`,
       },
@@ -1823,11 +1830,16 @@ async function acquireFootage(
   // never re-download + re-QC the same asset as the tier bar descends.
   const qcRejected = new Set<string>();
 
-  const tryList = async (list: PoolHit[], ignoreAvoidList = false, qc = false) => {
+  const tryList = async (list: PoolHit[], ignoreAvoidList = false, qc = false, allowReuse = false) => {
     if (list.length === 0) return null;
     const fresh = usedIds && usedIds.size > 0 ? list.filter((s) => !usedIds.has(s.hit.dedupeId)) : list;
+    const reusing = fresh.length === 0 && !!usedIds && usedIds.size > 0;
+    // NO DUPLICATES mid-search: if every candidate in THIS list was already used
+    // in the run, don't repeat an image yet — return null so the caller broadens
+    // the search / generates a unique AI image first. Reuse is allowed only on
+    // the explicit last-resort passes (better a repeat than a failed scene).
+    if (reusing && !allowReuse) return null;
     const ordered = fresh.length > 0 ? fresh : list;
-    const reusing = fresh.length === 0 && usedIds && usedIds.size > 0;
     for (const s of ordered) {
       if (usedIds && usedIds.has(s.hit.dedupeId) && !reusing) continue;
 
@@ -1934,9 +1946,13 @@ async function acquireFootage(
 
     // Which candidates vision looks at: round-robin across sources (not the
     // pure text-top, which let one wordier source take every slot). Bounded by
-    // VISION_CANDIDATE_LIMIT so it stays ~1 Gemini call.
+    // VISION_CANDIDATE_LIMIT so it stays ~1 Gemini call. Already-used assets
+    // don't get slots — they can't be picked anyway (no-duplicates), so judging
+    // them would waste the very slots a pickable candidate needs.
     const visLimit = Math.max(1, Number(getSetting("VISION_CANDIDATE_LIMIT") || "12"));
-    const toScore = pickForVision(scorable, visLimit).map((x) => x.hit);
+    const unusedScorable =
+      usedIds && usedIds.size > 0 ? scorable.filter((x) => !usedIds.has(x.hit.dedupeId)) : scorable;
+    const toScore = pickForVision(unusedScorable.length > 0 ? unusedScorable : scorable, visLimit).map((x) => x.hit);
 
     const vision = await aiScoreHitsByVision(runId, scene.text, videoContext, toScore, baseQueries[0] || "");
     // When vision SUCCEEDED this attempt, a candidate that Gemini never looked at
@@ -2013,10 +2029,12 @@ async function acquireFootage(
       if (ai) return ai;
     }
     // Below every tier — take the single best rather than fail the scene.
+    // (allowReuse: at this point broadening AND the AI fallback have both been
+    // tried — a repeated image is now the lesser evil vs a failed scene.)
     log(runId, "warn", `Scene #${scene.index}: weak match only — using best available (${((pool[0]?.score ?? 0) * 100).toFixed(0)}%)`, {
       stage: "animate",
     });
-    const got = await tryList(pool);
+    const got = await tryList(pool, false, false, true);
     if (got) return got;
   }
 
@@ -2025,7 +2043,7 @@ async function acquireFootage(
     log(runId, "warn", `Scene #${scene.index}: all candidates skipped due to adjacent duplicate. Retrying with duplicate allowed as fallback.`, {
       stage: "animate",
     });
-    const got = await tryList(pool, true);
+    const got = await tryList(pool, true, false, true);
     if (got) return got;
   }
 
