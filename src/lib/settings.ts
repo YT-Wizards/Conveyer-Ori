@@ -236,7 +236,7 @@ export const DEFAULTS: Record<SettingKey, string> = {
   MAX_PAUSE_SECONDS: "0.6",
 
   // Stock footage
-  FOOTAGE_SOURCES: "pexels,pixabay,openverse,wikimedia",
+  FOOTAGE_SOURCES: "pexels,pixabay,openverse,wikimedia,met,loc,archive",
   OPENVERSE_TOKEN: "",
   FOOTAGE_AI_PICK: "on",
   FOOTAGE_QC_ENABLED: "on",

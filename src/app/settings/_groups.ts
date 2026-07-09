@@ -239,6 +239,12 @@ export const ALL_GROUPS: Group[] = [
         desc: "Adds Pixabay as an extra footage source — more candidates for rare subjects. Works fine without it.",
         examples: "Get it at https://pixabay.com/api/docs/",
       },
+      {
+        key: "FOOTAGE_SOURCES",
+        label: "Footage sources",
+        desc: "Which libraries to search, comma-separated. Free archival ones (met, loc, archive) are great for historical topics and need no key. Remove any you don't want.",
+        examples: "pexels,pixabay,openverse,wikimedia,met,loc,archive",
+      },
     ],
   },
 ];

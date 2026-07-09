@@ -932,13 +932,13 @@ interface FootageHit {
 
 /** Which libraries to query, in order. Default Pexels + Pixabay. */
 function configuredFootageSources(): string[] {
-  const raw = getSetting("FOOTAGE_SOURCES") || "pexels,pixabay,openverse,wikimedia";
-  const known = new Set(["pexels", "pixabay", "openverse", "wikimedia", "archive"]);
+  const raw = getSetting("FOOTAGE_SOURCES") || "pexels,pixabay,openverse,wikimedia,met,loc,archive";
+  const known = new Set(["pexels", "pixabay", "openverse", "wikimedia", "met", "loc", "archive"]);
   const list = raw
     .split(/[\n,;]+/)
     .map((s) => s.trim().toLowerCase())
     .filter((s) => known.has(s));
-  return list.length > 0 ? [...new Set(list)] : ["pexels", "pixabay", "openverse", "wikimedia"];
+  return list.length > 0 ? [...new Set(list)] : ["pexels", "pixabay", "openverse", "wikimedia", "met", "loc", "archive"];
 }
 
 /** Generic stream-download (used by Pixabay + any direct-URL source). */
@@ -1281,7 +1281,7 @@ async function archiveHits(query: string): Promise<FootageHit[]> {
         metadata?: { title?: string; creator?: string; licenseurl?: string };
       };
       const mp4 = (meta.files ?? [])
-        .filter((f) => f.name?.toLowerCase().endsWith(".mp4") && Number(f.size || 0) > 0 && Number(f.size) < 80 * 1024 * 1024)
+        .filter((f) => f.name?.toLowerCase().endsWith(".mp4") && Number(f.size || 0) > 0 && Number(f.size) < 120 * 1024 * 1024)
         .sort((a, b) => Number(a.size) - Number(b.size))[0];
       if (!mp4?.name) continue;
       const fileUrl = `https://archive.org/download/${encodeURIComponent(d.identifier!)}/${encodeURIComponent(mp4.name)}`;
@@ -1299,6 +1299,98 @@ async function archiveHits(query: string): Promise<FootageHit[]> {
     } catch {
       // skip this item, keep the rest
     }
+  }
+  return hits;
+}
+
+/** The Met Open Access — public-domain museum objects (Arms & Armor, historical
+ *  artifacts, prints). No API key. Two-step: search → per-object image + PD flag. */
+async function metHits(query: string): Promise<FootageHit[]> {
+  const metSearch = async (q: string): Promise<number[]> => {
+    const u = new URL("https://collectionapi.metmuseum.org/public/collection/v1/search");
+    u.searchParams.set("q", q.slice(0, 120));
+    u.searchParams.set("hasImages", "true");
+    const r = await tfetch(u, { headers: { "User-Agent": FOOTAGE_UA } });
+    if (!r.ok) throw new Error(`Met search ${r.status}`);
+    return ((await r.json()) as { objectIDs?: number[] | null }).objectIDs ?? [];
+  };
+  // The Met's search is near-exact: a multi-word query ("flintlock musket") often
+  // returns 0 while single category nouns are rich (musket 132, revolver 145). Our
+  // queries are entity-first, so the category noun is the LAST token — fall back to
+  // it (then the first token) when the full query finds nothing.
+  let ids = await metSearch(query);
+  if (ids.length === 0) {
+    const toks = relevanceTokens(query);
+    if (toks.length) ids = await metSearch(toks[toks.length - 1]);
+    if (ids.length === 0 && toks.length > 1) ids = await metSearch(toks[0]);
+  }
+  ids = ids.slice(0, 6); // cap object fetches per query
+  const hits: FootageHit[] = [];
+  for (const id of ids) {
+    try {
+      const oResp = await tfetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`, {
+        headers: { "User-Agent": FOOTAGE_UA },
+      });
+      if (!oResp.ok) continue;
+      const o = (await oResp.json()) as {
+        isPublicDomain?: boolean;
+        primaryImage?: string;
+        primaryImageSmall?: string;
+        title?: string;
+        artistDisplayName?: string;
+        objectURL?: string;
+        objectName?: string;
+        classification?: string;
+      };
+      if (!o.isPublicDomain || !o.primaryImage) continue; // PD + has image only
+      hits.push({
+        source: "met",
+        dedupeId: `met:${id}`,
+        desc: `${titleWords(o.title || "")} ${o.objectName || ""} ${o.classification || ""}`.replace(/\s+/g, " ").trim(),
+        thumbUrl: o.primaryImageSmall || o.primaryImage,
+        author: o.artistDisplayName || null,
+        sourceUrl: o.objectURL || "",
+        meta: "The Met (public domain)",
+        download: (out) => downloadUrlToFile(o.primaryImage!, out),
+        downloadUrl: o.primaryImage,
+      });
+    } catch {
+      // skip this object, keep the rest
+    }
+  }
+  return hits;
+}
+
+/** Library of Congress — public-domain American photos/prints (frontier, war era,
+ *  historical). No API key. Uses the largest search-result image. */
+async function locHits(query: string): Promise<FootageHit[]> {
+  const url = new URL("https://www.loc.gov/search/");
+  url.searchParams.set("q", query.slice(0, 120));
+  url.searchParams.set("fo", "json");
+  url.searchParams.set("fa", "online-format:image");
+  url.searchParams.set("c", "20");
+  const resp = await tfetch(url, { headers: { "User-Agent": FOOTAGE_UA } });
+  if (!resp.ok) throw new Error(`LoC ${resp.status}`);
+  const data = (await resp.json()) as {
+    results?: { id?: string; title?: string; image_url?: string[]; url?: string }[];
+  };
+  const abs = (u: string) => (u.startsWith("//") ? "https:" + u : u);
+  const hits: FootageHit[] = [];
+  for (const r of data.results ?? []) {
+    const imgs = (r.image_url ?? []).filter(Boolean);
+    if (imgs.length === 0) continue;
+    const full = abs(imgs[imgs.length - 1]); // largest available
+    hits.push({
+      source: "loc",
+      dedupeId: `loc:${r.id || full}`,
+      desc: titleWords(r.title || ""),
+      thumbUrl: abs(imgs[0]),
+      author: null,
+      sourceUrl: r.url || "",
+      meta: "Library of Congress",
+      download: (out) => downloadUrlToFile(full, out),
+      downloadUrl: full,
+    });
   }
   return hits;
 }
@@ -1363,6 +1455,10 @@ async function gatherHits(
         hits = kind === "photo" ? await openverseHits(query) : [];
       } else if (src === "wikimedia") {
         hits = kind === "photo" ? await wikimediaHits(query) : [];
+      } else if (src === "met") {
+        hits = kind === "photo" ? await metHits(query) : [];
+      } else if (src === "loc") {
+        hits = kind === "photo" ? await locHits(query) : [];
       } else if (src === "archive") {
         hits = kind === "video" ? await archiveHits(query) : [];
       }
